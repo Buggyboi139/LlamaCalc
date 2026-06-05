@@ -779,15 +779,28 @@ function handleModelChange() {
 }
 
 function renderLogs() {
-    logTable.innerHTML = benchmarkLogs.map(l => `
+    logTable.innerHTML = benchmarkLogs.map((l, index) => `
         <tr style="border-bottom: 1px solid var(--border-glass);">
             <td style="padding: 10px;">${escapeHtml(l.model)}</td>
             <td style="padding: 10px;">${escapeHtml(l.context)}</td>
-            <td style="padding: 10px;">${escapeHtml(l.promptTs)}</td>
-            <td style="padding: 10px;">${escapeHtml(l.genTs)}</td>
+            <td style="padding: 10px;">
+                <input type="text" class="editable-table-input" data-index="${index}" data-field="promptTs" value="${escapeHtml(l.promptTs)}">
+            </td>
+            <td style="padding: 10px;">
+                <input type="text" class="editable-table-input" data-index="${index}" data-field="genTs" value="${escapeHtml(l.genTs)}">
+            </td>
             <td style="padding: 10px; font-family: monospace; font-size: 0.8rem; word-break: break-all;">${escapeHtml(l.command)}</td>
         </tr>
     `).join('');
+
+    document.querySelectorAll('.editable-table-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = e.target.getAttribute('data-index');
+            const field = e.target.getAttribute('data-field');
+            benchmarkLogs[idx][field] = e.target.value.trim();
+            localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(benchmarkLogs));
+        });
+    });
 }
 
 function init() {
