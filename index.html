@@ -76,12 +76,21 @@
                         </div>
                     </div>
                     <div class="input-group">
+                        <label>Executable Path</label>
+                        <input type="text" id="execPathInput" class="glass-input" value="./llama.cpp/build/bin/llama-cli">
+                    </div>
+                    <div class="input-group">
                         <label>Environment</label>
                         <select id="envSelect" class="glass-input">
                             <option value="gpu">GPU</option>
                             <option value="cpu">CPU</option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            <div class="calc-row">
+                <div class="input-row">
                     <div class="input-group">
                         <label>Model</label>
                         <select id="modelSelect" class="glass-input"></select>
@@ -99,7 +108,7 @@
                         <label>Thinking Model Controls</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <input type="checkbox" id="reasoningCheck" class="cat-checkbox">
-                            <label for="reasoningCheck" class="cat-label">Disable Reasoning</label>
+                            <label for="reasoningCheck" class="cat-label" data-tooltip="Forces the model to skip generating thought processes. (--reasoning off)">Disable Reasoning</label>
                         </div>
                     </div>
                 </div>
@@ -142,13 +151,45 @@
             <div class="calc-row">
                 <div class="toggles-grid">
                     <input type="checkbox" id="flashattnCheck" class="cat-checkbox">
-                    <label for="flashattnCheck" class="cat-label">Flash Attention</label>
+                    <label for="flashattnCheck" class="cat-label" data-tooltip="Speeds up long context processing and saves VRAM using optimized math. (--flash-attn on)">Flash Attention</label>
+                    <input type="checkbox" id="noKvOffloadCheck" class="cat-checkbox">
+                    <label for="noKvOffloadCheck" class="cat-label" data-tooltip="Forces the Chat History memory to stay on the CPU instead of the graphics card. Slows down generation but saves VRAM. (-nkvo)">Disable KV Offload</label>
+                    <input type="checkbox" id="noPromptCacheCheck" class="cat-checkbox">
+                    <label for="noPromptCacheCheck" class="cat-label" data-tooltip="Stops the AI from saving recently read text. Saves memory but makes re-reading the same prompt much slower. (--no-cache-prompt)">Disable Prompt Caching</label>
+                    <input type="checkbox" id="contextShiftCheck" class="cat-checkbox">
+                    <label for="contextShiftCheck" class="cat-label" data-tooltip="Allows the AI to infinitely generate text by deleting the oldest chat messages on the fly. (--context-shift)">Enable Context Shift</label>
                     <input type="checkbox" id="nommapCheck" class="cat-checkbox">
-                    <label for="nommapCheck" class="cat-label">No MMAP</label>
+                    <label for="nommapCheck" class="cat-label" data-tooltip="Forces the model fully into System RAM instead of streaming it from your storage drive. Faster if you have enough RAM. (--no-mmap)">No MMAP</label>
                     <input type="checkbox" id="mlockCheck" class="cat-checkbox">
-                    <label for="mlockCheck" class="cat-label">MLock</label>
+                    <label for="mlockCheck" class="cat-label" data-tooltip="Locks the AI in RAM so the operating system doesn't accidentally move it to slow disk storage. (--mlock)">MLock</label>
                     <input type="checkbox" id="numaCheck" class="cat-checkbox">
-                    <label for="numaCheck" class="cat-label">NUMA</label>
+                    <label for="numaCheck" class="cat-label" data-tooltip="Optimizes how the AI talks to the CPU on high-end, multi-processor motherboards. (--numa)">NUMA</label>
+                </div>
+            </div>
+
+            <div class="calc-row">
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Thread Priority <span class="tooltip-icon" data-tooltip="Tells your computer's processor to prioritize the AI over other background apps. (--prio)">?</span></label>
+                        <select id="threadPrioSelect" class="glass-input">
+                            <option value="0">Normal</option>
+                            <option value="1">Medium</option>
+                            <option value="2">High</option>
+                            <option value="3">Realtime</option>
+                        </select>
+                    </div>
+                    <div class="input-group" id="splitModeGroup" style="display: none;">
+                        <label>Split Mode <span class="tooltip-icon" data-tooltip="Determines how the AI is sliced up across multiple graphics cards. 'Layer' is standard, 'Row/Tensor' can be faster for specific setups. (-sm)">?</span></label>
+                        <select id="splitModeSelect" class="glass-input">
+                            <option value="layer">Layer (Default)</option>
+                            <option value="row">Row</option>
+                            <option value="tensor">Tensor</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>MoE CPU Expert Offload</label>
+                        <input type="number" id="ncpumoeInput" class="glass-input" value="0">
+                    </div>
                 </div>
             </div>
 
@@ -186,23 +227,6 @@
                             <option value="q8_0">q8_0</option>
                             <option value="q4_0">q4_0</option>
                         </select>
-                    </div>
-                    <div class="input-group">
-                        <label>MoE CPU Expert Offload</label>
-                        <input type="number" id="ncpumoeInput" class="glass-input" value="0">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Threads Batch</label>
-                        <input type="number" id="threadsbatchInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>Batch Size</label>
-                        <input type="number" id="batchsizeInput" class="glass-input" value="512">
                     </div>
                     <div class="input-group">
                         <label>GPU Bandwidth (GB/s)</label>
@@ -266,6 +290,14 @@
                             <option value="isolate">Isolate</option>
                             <option value="numactl">Numactl</option>
                         </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Threads Batch</label>
+                        <input type="number" id="threadsbatchInput" class="glass-input" value="">
+                    </div>
+                    <div class="input-group">
+                        <label>Batch Size</label>
+                        <input type="number" id="batchsizeInput" class="glass-input" value="512">
                     </div>
                 </div>
             </div>

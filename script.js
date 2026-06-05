@@ -8,6 +8,7 @@ const gpuCountInput = document.getElementById('gpuCountInput');
 const cpuInput = document.getElementById('cpuInput');
 const envSelect = document.getElementById('envSelect');
 const modelPathInput = document.getElementById('modelPathInput');
+const execPathInput = document.getElementById('execPathInput');
 const jinjaInput = document.getElementById('jinjaInput');
 
 const modeRadios = document.querySelectorAll('input[name="runMode"]');
@@ -19,9 +20,16 @@ const npInput = document.getElementById('npInput');
 const nommapCheck = document.getElementById('nommapCheck');
 const mlockCheck = document.getElementById('mlockCheck');
 const flashattnCheck = document.getElementById('flashattnCheck');
+const noKvOffloadCheck = document.getElementById('noKvOffloadCheck');
+const noPromptCacheCheck = document.getElementById('noPromptCacheCheck');
+const contextShiftCheck = document.getElementById('contextShiftCheck');
 const ncpumoeInput = document.getElementById('ncpumoeInput');
 const threadsbatchInput = document.getElementById('threadsbatchInput');
 const batchsizeInput = document.getElementById('batchsizeInput');
+
+const threadPrioSelect = document.getElementById('threadPrioSelect');
+const splitModeSelect = document.getElementById('splitModeSelect');
+const splitModeGroup = document.getElementById('splitModeGroup');
 
 const cacheTypeKSelect = document.getElementById('cacheTypeKSelect');
 const cacheTypeVSelect = document.getElementById('cacheTypeVSelect');
@@ -112,10 +120,16 @@ function saveState() {
             cpu:           cpuInput.value,
             env:           envSelect.value,
             modelPath:     modelPathInput.value,
+            execPath:      execPathInput.value,
             jinja:         jinjaInput.value,
             nommap:        nommapCheck.checked,
             mlock:         mlockCheck.checked,
             flashattn:     flashattnCheck.checked,
+            noKvOffload:   noKvOffloadCheck.checked,
+            noPromptCache: noPromptCacheCheck.checked,
+            contextShift:  contextShiftCheck.checked,
+            threadPrio:    threadPrioSelect.value,
+            splitMode:     splitModeSelect.value,
             ncpumoe:       ncpumoeInput.value,
             threadsbatch:  threadsbatchInput.value,
             batchsize:     batchsizeInput.value,
@@ -160,10 +174,16 @@ function loadState() {
         if (s.cpu !== undefined)    cpuInput.value = s.cpu;
         if (s.env)                  envSelect.value = s.env;
         if (s.modelPath !== undefined) modelPathInput.value = s.modelPath;
+        if (s.execPath !== undefined)  execPathInput.value = s.execPath;
         if (s.jinja !== undefined)  jinjaInput.value = s.jinja;
         if (s.nommap !== undefined) nommapCheck.checked = s.nommap;
         if (s.mlock !== undefined)  mlockCheck.checked = s.mlock;
         if (s.flashattn !== undefined) flashattnCheck.checked = s.flashattn;
+        if (s.noKvOffload !== undefined) noKvOffloadCheck.checked = s.noKvOffload;
+        if (s.noPromptCache !== undefined) noPromptCacheCheck.checked = s.noPromptCache;
+        if (s.contextShift !== undefined) contextShiftCheck.checked = s.contextShift;
+        if (s.threadPrio)           threadPrioSelect.value = s.threadPrio;
+        if (s.splitMode)            splitModeSelect.value = s.splitMode;
         if (s.ncpumoe !== undefined)   ncpumoeInput.value = s.ncpumoe;
         if (s.threadsbatch !== undefined) threadsbatchInput.value = s.threadsbatch;
         if (s.batchsize !== undefined)    batchsizeInput.value = s.batchsize;
@@ -347,9 +367,10 @@ function estimateMoeExpertRamGB(model, modelWeightGB, ncpumoe) {
     return modelWeightGB * expertFractionOfWeight * (clampedN / layers);
 }
 
-function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay, physicalCores, vramPerGpu, gpuCount }) {
+function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay, physicalCores, vramPerGpu, gpuCount, disableKvOffload }) {
     const decodeWeightGB = Math.max(estimateDecodeWeightGB(model, modelWeightGB), 0.01);
-    const kvGB = kvCacheGB || 0;
+    const kvVramGB = disableKvOffload ? 0 : kvCacheGB;
+    const kvRamGB  = disableKvOffload ? kvCacheGB : 0;
     const layers = model.layers || 32;
     const gpuBandwidthPerGpu = estimateGpuBandwidthGBps(vramPerGpu);
     const effectiveGpuBandwidth = gpuBandwidthPerGpu * (gpuCount || 1);
@@ -358,10 +379,13 @@ function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay
     const cpuEfficiency = 0.35;
     const coreFactor    = Math.min(1, physicalCores / 8);
 
-    const fullGpuTps = effectiveGpuBandwidth > 0
-        ? (effectiveGpuBandwidth * gpuEfficiency) / (decodeWeightGB + kvGB)
-        : 0;
-    const cpuTps = (ramBandwidth * cpuEfficiency * coreFactor) / (decodeWeightGB + kvGB);
+    let fullGpuTps = 0;
+    if (effectiveGpuBandwidth > 0) {
+        const gpuTime = decodeWeightGB / (effectiveGpuBandwidth * gpuEfficiency);
+        const cpuTime = kvRamGB / (ramBandwidth * cpuEfficiency * coreFactor);
+        fullGpuTps = 1 / (gpuTime + cpuTime);
+    }
+    const cpuTps = (ramBandwidth * cpuEfficiency * coreFactor) / (decodeWeightGB + kvCacheGB);
 
     if (mode === "full_gpu") {
         return { selectedTps: fullGpuTps, fullGpuTps, cpuTps, hybridTps: 0, prefillTps: fullGpuTps * 8 };
@@ -370,8 +394,8 @@ function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay
     if (mode === "hybrid" && nglDisplay > 0 && layers > 0 && effectiveGpuBandwidth > 0) {
         const gpuFraction = clamp(nglDisplay / layers, 0, 1);
         const cpuFraction = 1 - gpuFraction;
-        const gpuTime = (decodeWeightGB * gpuFraction + kvGB) / (effectiveGpuBandwidth * gpuEfficiency);
-        const cpuTime = (decodeWeightGB * cpuFraction) / (ramBandwidth * cpuEfficiency * coreFactor);
+        const gpuTime = (decodeWeightGB * gpuFraction + kvVramGB) / (effectiveGpuBandwidth * gpuEfficiency);
+        const cpuTime = (decodeWeightGB * cpuFraction + kvRamGB) / (ramBandwidth * cpuEfficiency * coreFactor);
         const syncPenalty = 1 + 0.25 + 0.10;
         const hybridTps = Math.min(1 / ((gpuTime + cpuTime) * syncPenalty), fullGpuTps);
         return { selectedTps: hybridTps, fullGpuTps, cpuTps, hybridTps, prefillTps: hybridTps * 5 };
@@ -380,7 +404,7 @@ function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay
     return { selectedTps: cpuTps, fullGpuTps, cpuTps, hybridTps: 0, prefillTps: cpuTps * 3 };
 }
 
-function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB, availableVram, availableRam, moeExpertRamGB }) {
+function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB, availableVram, availableRam, moeExpertRamGB, disableKvOffload }) {
     const layers   = model.layers || 32;
     const moeRamGB = moeExpertRamGB || 0;
     const effectiveVramWeightGB = Math.max(0, modelWeightGB - moeRamGB);
@@ -388,6 +412,9 @@ function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB
     const repeatingWeightGB     = effectiveVramWeightGB - nonRepeatingWeightGB;
     const totalRuntimeMemoryGB  = modelWeightGB + kvCacheGB + computeBufferGB + METADATA_OVERHEAD_GB;
     const totalAvailableMemoryGB = availableVram + availableRam;
+
+    const kvVramGB = disableKvOffload ? 0 : kvCacheGB;
+    const kvRamGB  = disableKvOffload ? kvCacheGB : 0;
 
     if (totalRuntimeMemoryGB > totalAvailableMemoryGB) {
         return { mode: "oom", nglCommand: null, nglDisplay: 0,
@@ -401,20 +428,20 @@ function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB
             vramUsedGB: 0, ramUsedGB: totalRuntimeMemoryGB, totalRuntimeMemoryGB };
     }
 
-    if (effectiveVramWeightGB + kvCacheGB + computeBufferGB + METADATA_OVERHEAD_GB <= availableVram) {
+    if (effectiveVramWeightGB + kvVramGB + computeBufferGB + METADATA_OVERHEAD_GB <= availableVram) {
         return { mode: "full_gpu", nglCommand: 999, nglDisplay: layers,
-            vramUsedGB: totalRuntimeMemoryGB - moeRamGB,
-            ramUsedGB:  moeRamGB,
+            vramUsedGB: totalRuntimeMemoryGB - moeRamGB - kvRamGB,
+            ramUsedGB:  moeRamGB + kvRamGB,
             totalRuntimeMemoryGB };
     }
 
-    if (kvCacheGB + computeBufferGB + METADATA_OVERHEAD_GB < availableVram) {
-        const vramForWeightsGB   = availableVram - kvCacheGB - computeBufferGB - METADATA_OVERHEAD_GB - nonRepeatingWeightGB;
+    if (kvVramGB + computeBufferGB + METADATA_OVERHEAD_GB < availableVram) {
+        const vramForWeightsGB   = availableVram - kvVramGB - computeBufferGB - METADATA_OVERHEAD_GB - nonRepeatingWeightGB;
         const weightGBPerLayer   = repeatingWeightGB / layers;
         const nglDisplay         = clamp(Math.floor(vramForWeightsGB / weightGBPerLayer), 0, layers);
         const gpuRepeatingWeightGB = weightGBPerLayer * nglDisplay;
         const gpuWeightGB        = nglDisplay > 0 ? nonRepeatingWeightGB + gpuRepeatingWeightGB : 0;
-        const vramUsedGB         = kvCacheGB + computeBufferGB + METADATA_OVERHEAD_GB + gpuWeightGB;
+        const vramUsedGB         = kvVramGB + computeBufferGB + METADATA_OVERHEAD_GB + gpuWeightGB;
         return {
             mode:       nglDisplay > 0 ? "hybrid" : "cpu",
             nglCommand: nglDisplay > 0 ? nglDisplay : null,
@@ -452,12 +479,13 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
     function add(text, warning = null) { parts.push({ text, warning }); }
 
     const modelPath      = modelPathInput.value.trim() || 'model.gguf';
+    const execPath       = execPathInput.value.trim() || (runMode === 'server' ? `./llama.cpp/build/bin/llama-server` : `./llama.cpp/build/bin/llama-cli`);
     const decodeThreads  = clamp(physicalCores, 1, logicalThreads);
     const batchThreadsVal = Number.parseInt(threadsbatchInput.value, 10);
     const batchThreads   = Number.isFinite(batchThreadsVal) ? clamp(batchThreadsVal, 0, logicalThreads) : 0;
     const batchSize      = Number.parseInt(batchsizeInput.value, 10) || 0;
 
-    add(runMode === 'server' ? `./llama.cpp/build/bin/llama-server` : `./llama.cpp/build/bin/llama-cli`);
+    add(execPath);
     add(`-m ${shellQuote(modelPath)}`);
 
     const ctxWarning = (selectedModel.max_context && contextSize > selectedModel.max_context)
@@ -482,10 +510,25 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
 
     if (gpuCount > 1 && mode !== "cpu" && mode !== "oom") {
         add(`--tensor-split ${Array(gpuCount).fill('1').join(',')}`);
+        if (splitModeSelect.value !== 'layer') {
+            add(`-sm ${splitModeSelect.value}`);
+        }
     }
 
     if (flashattnCheck.checked && selectedModel.supports_flash_attention !== false) {
         add(`--flash-attn on`);
+    }
+
+    if (noKvOffloadCheck.checked) {
+        add(`-nkvo`);
+    }
+
+    if (noPromptCacheCheck.checked) {
+        add(`--no-cache-prompt`);
+    }
+
+    if (contextShiftCheck.checked) {
+        add(`--context-shift`);
     }
 
     const cacheTypeK = cacheTypeKSelect.value;
@@ -548,6 +591,10 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         add(`--numa ${numaModeSelect.value}`);
     }
 
+    if (threadPrioSelect.value !== "0") {
+        add(`--prio ${threadPrioSelect.value}`);
+    }
+
     if (batchThreads > 0) {
         const tbWarning = (Number.isFinite(batchThreadsVal) && batchThreadsVal > logicalThreads)
             ? `-tb value ${batchThreadsVal} exceeds the inferred logical thread count (${logicalThreads}). The value has been clamped to ${logicalThreads}.`
@@ -604,6 +651,13 @@ function calculateMetrics() {
     samplingSection.style.display = runMode === 'cli'    ? 'block' : 'none';
     numaRow.style.display         = physicalCores >= 16  ? 'flex' : 'none';
 
+    if (gpuCount > 1) {
+        splitModeGroup.style.display = 'flex';
+    } else {
+        splitModeGroup.style.display = 'none';
+        splitModeSelect.value = 'layer';
+    }
+
     if (selectedModel.is_thinking_model) {
         reasoningToggleRow.style.display = 'flex';
     } else {
@@ -625,12 +679,12 @@ function calculateMetrics() {
 
     let offload = estimateOffload({
         env, model: selectedModel, modelWeightGB, kvCacheGB,
-        computeBufferGB, availableVram, availableRam, moeExpertRamGB
+        computeBufferGB, availableVram, availableRam, moeExpertRamGB, disableKvOffload: noKvOffloadCheck.checked
     });
 
     let performance = estimatePerformance({
         mode: offload.mode, model: selectedModel, modelWeightGB, kvCacheGB,
-        nglDisplay: offload.nglDisplay, physicalCores, vramPerGpu, gpuCount
+        nglDisplay: offload.nglDisplay, physicalCores, vramPerGpu, gpuCount, disableKvOffload: noKvOffloadCheck.checked
     });
 
     if (offload.mode === "hybrid" && performance.hybridTps < performance.cpuTps) {
@@ -639,7 +693,7 @@ function calculateMetrics() {
             vramUsedGB: 0, ramUsedGB: offload.totalRuntimeMemoryGB };
         performance = estimatePerformance({
             mode: "cpu", model: selectedModel, modelWeightGB, kvCacheGB,
-            nglDisplay: 0, physicalCores, vramPerGpu, gpuCount
+            nglDisplay: 0, physicalCores, vramPerGpu, gpuCount, disableKvOffload: noKvOffloadCheck.checked
         });
     }
 
@@ -682,13 +736,14 @@ function calculateMetrics() {
     offloadDisplay.style.color = presentation.color;
     offloadDisplay.title = warnings.join("\n");
 
+    const visualKvCacheGB = noKvOffloadCheck.checked ? 0 : kvCacheGB;
     lblOs.textContent    = env === "gpu" ? OS_VRAM_OVERHEAD_GB : "0";
-    lblCtx.textContent   = kvCacheGB.toFixed(1);
+    lblCtx.textContent   = visualKvCacheGB.toFixed(1);
     lblModel.textContent = modelWeightGB.toFixed(1);
 
     if (totalVram > 0 && env === "gpu") {
         const pctOs    = (OS_VRAM_OVERHEAD_GB / totalVram) * 100;
-        const pctCtx   = (kvCacheGB / totalVram) * 100;
+        const pctCtx   = (visualKvCacheGB / totalVram) * 100;
         const pctModel = (modelWeightGB / totalVram) * 100;
         barOs.style.width    = `${Math.min(pctOs, 100)}%`;
         barCtx.style.width   = `${Math.min(pctCtx, 100 - pctOs)}%`;
@@ -718,9 +773,6 @@ function handleModelChange() {
     const faLabel = document.querySelector('label[for="flashattnCheck"]');
     if (faLabel) {
         faLabel.style.opacity = supportsFA ? '1' : '0.4';
-        faLabel.title = supportsFA
-            ? 'Optimizes attention mechanism to heavily reduce VRAM usage during long context generation.'
-            : 'Flash attention not supported by this model.';
     }
 
     calculateMetrics();
@@ -778,8 +830,10 @@ function init() {
 
 const allInputs = [
     modelSelect, quantSelect, vramInput, ramInput, gpuCountInput, cpuInput, envSelect,
-    modelPathInput, jinjaInput, nommapCheck, mlockCheck, flashattnCheck,
+    modelPathInput, execPathInput, jinjaInput, nommapCheck, mlockCheck, flashattnCheck,
+    noKvOffloadCheck, noPromptCacheCheck, contextShiftCheck,
     ncpumoeInput, threadsbatchInput, batchsizeInput, hostInput, portInput, npInput,
+    threadPrioSelect, splitModeSelect,
     cacheTypeKSelect, cacheTypeVSelect, gpuBandwidthInput, ramBandwidthInput,
     ropeScalingSelect, ropeFreqBaseInput, ropeFreqScaleInput,
     loraPathInput, loraScaleInput, numaCheck, numaModeSelect,
@@ -794,7 +848,15 @@ allInputs.forEach(input => {
     }
 });
 
-modeRadios.forEach(radio => radio.addEventListener('change', calculateMetrics));
+modeRadios.forEach(radio => radio.addEventListener('change', (e) => {
+    const currentVal = execPathInput.value.trim();
+    if (e.target.value === 'server' && (currentVal === './llama.cpp/build/bin/llama-cli' || currentVal === '')) {
+        execPathInput.value = './llama.cpp/build/bin/llama-server';
+    } else if (e.target.value === 'cli' && (currentVal === './llama.cpp/build/bin/llama-server' || currentVal === '')) {
+        execPathInput.value = './llama.cpp/build/bin/llama-cli';
+    }
+    calculateMetrics();
+}));
 modelSelect.addEventListener('change', handleModelChange);
 
 contextSlider.addEventListener('input', (e) => {
