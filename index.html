@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llama.cpp Deployment Planner</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="left-color-bar"></div>
+    <nav>
+        <div class="logo-container">
+            <span class="logo-text">llama.cpp Planner</span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="view-section active-view">
+            <div id="setup-view">
+                <h1>Hardware Profile & Planner</h1>
+                <p class="subtitle">Optimize local offloading, prevent OOM crashes, and deploy seamlessly.</p>
+
+                <div class="dashboard-grid">
+
+                    <!-- ═══════════════════════════════════════════════
+                         LEFT COLUMN: Controls
+                    ════════════════════════════════════════════════ -->
+                    <div>
+
+                        <!-- Main Controls -->
+                        <div class="control-panel">
+
+                            <!-- Run Mode -->
+                            <div class="calc-row">
+                                <div class="toggles-grid" style="margin-bottom: 20px;">
+                                    <input type="radio" id="modeCli" name="runMode" value="cli" class="cat-checkbox" checked>
+                                    <label for="modeCli" class="cat-label">CLI Mode</label>
+                                    <input type="radio" id="modeServer" name="runMode" value="server" class="cat-checkbox">
+                                    <label for="modeServer" class="cat-label">API Server Mode</label>
+                                </div>
+                            </div>
+
+                            <!-- Model + Quantization -->
+                            <div class="calc-row">
+                                <div class="input-row">
+                                    <div class="input-group">
+                                        <label>Model Parameter Base <span class="tooltip-icon" data-tooltip="Select the base model. Layer count, hidden size, KV heads, context limits, and quant sizes are used for estimation. [MoE] indicates Mixture-of-Experts architecture.">?</span></label>
+                                        <select id="modelSelect" class="glass-input"></select>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Quantization <span class="tooltip-icon" data-tooltip="GGUF quantization format. ★ marks recommended formats. Model-specific sizes are used when available, otherwise catalog fallback bytes per parameter are used.">?</span></label>
+                                        <select id="quantSelect" class="glass-input"></select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- VRAM + GPU Count + RAM -->
+                            <div class="calc-row">
+                                <div class="input-row">
+                                    <div class="input-group">
+                                        <label>GPU VRAM (GB) <span class="tooltip-icon" data-tooltip="Total video memory per GPU. OS/backend reserve is subtracted before placing KV cache and model layers.">?</span></label>
+                                        <input type="number" id="vramInput" class="glass-input" value="12" min="0">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>GPU Count <span class="tooltip-icon" data-tooltip="Number of GPUs for tensor parallelism. Multiplies total available VRAM and adds --tensor-split to the command. Requires a tensor-parallel llama.cpp build.">?</span></label>
+                                        <input type="number" id="gpuCountInput" class="glass-input" value="1" min="1">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>System RAM (GB) <span class="tooltip-icon" data-tooltip="Total system memory. OS and safety reserves are subtracted before CPU-only or spillover memory checks.">?</span></label>
+                                        <input type="number" id="ramInput" class="glass-input" value="32" min="1">
+                                    </div>
+                                </div>
+                                <div class="input-row" style="margin-top: 15px;">
+                                    <div class="input-group">
+                                        <label>CPU Physical Cores <span class="tooltip-icon" data-tooltip="Actual physical cores. Do not include hyperthreads for optimal performance. NUMA controls appear automatically at 16+ cores.">?</span></label>
+                                        <input type="number" id="cpuInput" class="glass-input" value="6" min="1">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Environment <span class="tooltip-icon" data-tooltip="Select GPU offload or CPU-only execution. CPU-only commands omit -ngl.">?</span></label>
+                                        <select id="envSelect" class="glass-input">
+                                            <option value="gpu" selected>GPU / Metal</option>
+                                            <option value="cpu">CPU Only</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Context Slider with notched increments -->
+                            <div class="slider-container" style="margin-top: 30px;">
+                                <div class="input-group" style="text-align: center; margin-bottom: 10px;">
+                                    <label>Context Size <span class="tooltip-icon" data-tooltip="Maximum tokens retained at once. KV-cache memory is estimated from layers, KV heads, head dimension, context, and parallel slots. RoPE scaling controls appear automatically when context exceeds the model default.">?</span></label>
+                                    <div class="budget-display" id="contextDisplay">4096</div>
+                                </div>
+                                <div class="slider-wrapper">
+                                    <input type="range" id="contextSlider" min="0" max="6" step="1" value="1">
+                                </div>
+                                <!-- Notch marks aligned to thumb positions via calc() -->
+                                <div class="slider-notch-row" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                </div>
+                                <!-- Step labels aligned to the same positions -->
+                                <div class="slider-label-row" aria-hidden="true">
+                                    <span>2K</span><span>4K</span><span>8K</span><span>16K</span><span>32K</span><span>64K</span><span>128K</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ─── Advanced Flags ─── -->
+                        <div class="module-container active" style="margin-top: 30px;">
+                            <div class="module-header">Advanced Flags</div>
+                            <div class="module-content">
+
+                                <!-- Model path + Chat template -->
+                                <div class="calc-row">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>Model File Path <span class="tooltip-icon" data-tooltip="The path or name of your GGUF file for the command output.">?</span></label>
+                                            <input type="text" id="modelPathInput" class="glass-input" value="model.gguf">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Chat Template <span class="tooltip-icon" data-tooltip="Jinja chat template format (e.g., chatml, llama3). Auto-fills based on model.">?</span></label>
+                                            <input type="text" id="jinjaInput" class="glass-input" placeholder="Auto-fills...">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Server flags (conditional) -->
+                                <div class="calc-row" id="serverFlagsRow" style="display: none;">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>--host <span class="tooltip-icon" data-tooltip="The IP address the server will bind to. Use 0.0.0.0 to expose to your network.">?</span></label>
+                                            <input type="text" id="hostInput" class="glass-input" value="0.0.0.0">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--port <span class="tooltip-icon" data-tooltip="The port for the API server.">?</span></label>
+                                            <input type="number" id="portInput" class="glass-input" value="8080">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>-np (Parallel Slots) <span class="tooltip-icon" data-tooltip="Number of parallel server requests. Multiplies KV-cache memory approximately linearly.">?</span></label>
+                                            <input type="number" id="npInput" class="glass-input" value="1" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Checkboxes -->
+                                <div class="calc-row">
+                                    <div class="toggles-grid">
+                                        <input type="checkbox" id="flashattnCheck" class="cat-checkbox" checked>
+                                        <label for="flashattnCheck" class="cat-label" title="Optimizes attention mechanism to heavily reduce VRAM usage during long context generation.">--flash-attn</label>
+
+                                        <input type="checkbox" id="nommapCheck" class="cat-checkbox">
+                                        <label for="nommapCheck" class="cat-label" title="Disables memory mapping. Useful if you experience severe system paging or disk thrashing.">--no-mmap</label>
+
+                                        <input type="checkbox" id="mlockCheck" class="cat-checkbox">
+                                        <label for="mlockCheck" class="cat-label" title="Forces the model to stay in system RAM, preventing the OS from swapping it to disk.">--mlock</label>
+                                    </div>
+                                </div>
+
+                                <!-- n-cpu-moe + tb + b -->
+                                <div class="calc-row">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>--n-cpu-moe <span class="tooltip-icon" data-tooltip="Memory-layout override for MoE models only. Forces expert components of the first N layers into System RAM regardless of VRAM availability. If VRAM is abundant, this degrades performance by routing expert reads across the PCIe bus (~16–32 GB/s) instead of HBM/GDDR (~300–900 GB/s). Use only as a pressure valve when VRAM is nearly full to prevent OOM. Value is clamped to the model's total layer count. Omitted automatically for dense models.">?</span></label>
+                                            <input type="number" id="ncpumoeInput" class="glass-input" value="0" min="0">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>-tb (Threads Batch) <span class="tooltip-icon" data-tooltip="Threads used during prompt processing. Values are clamped to the inferred logical thread count.">?</span></label>
+                                            <input type="number" id="threadsbatchInput" class="glass-input" value="4" min="0">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>-b (Batch Size) <span class="tooltip-icon" data-tooltip="Logical maximum batch size for prompt processing. Higher values process prompts faster but require more RAM.">?</span></label>
+                                            <input type="number" id="batchsizeInput" class="glass-input" value="512" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- KV Cache Types -->
+                                <div class="calc-row">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>--cache-type-k <span class="tooltip-icon" data-tooltip="Quantization type for the K (key) KV cache. q8_0 halves cache memory; q4_0 reduces it by 75%. Reduces VRAM usage at the cost of minor quality loss. Reflected in KV cache size estimates above.">?</span></label>
+                                            <select id="cacheTypeKSelect" class="glass-input">
+                                                <option value="f16" selected>f16 (default)</option>
+                                                <option value="q8_0">q8_0 (−50%)</option>
+                                                <option value="q4_0">q4_0 (−75%)</option>
+                                            </select>
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--cache-type-v <span class="tooltip-icon" data-tooltip="Quantization type for the V (value) KV cache. q8_0 halves cache memory; q4_0 reduces it by 75%. Requires --flash-attn on for q4_0 on most backends.">?</span></label>
+                                            <select id="cacheTypeVSelect" class="glass-input">
+                                                <option value="f16" selected>f16 (default)</option>
+                                                <option value="q8_0">q8_0 (−50%)</option>
+                                                <option value="q4_0">q4_0 (−75%)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bandwidth Overrides -->
+                                <div class="calc-row">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>GPU Bandwidth (GB/s) <span class="tooltip-icon" data-tooltip="Override the inferred GPU memory bandwidth. Leave empty to use the VRAM-size heuristic. Enter your GPU's actual spec for more accurate TPS estimates (e.g. RTX 4090 = 1008, RX 7900 XTX = 960, M2 Ultra = 800).">?</span></label>
+                                            <input type="number" id="gpuBandwidthInput" class="glass-input" placeholder="Auto" min="1">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>RAM Bandwidth (GB/s) <span class="tooltip-icon" data-tooltip="Override the inferred system RAM bandwidth. Leave empty to use the core-count heuristic. Enter your actual spec for more accurate CPU/hybrid TPS estimates (e.g. DDR5 dual-ch ≈ 80, Apple M2 ≈ 100, DDR4 dual-ch ≈ 50).">?</span></label>
+                                            <input type="number" id="ramBandwidthInput" class="glass-input" placeholder="Auto" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- RoPE Scaling (shown when context > model default) -->
+                                <div id="ropeSection" style="display: none;">
+                                    <div class="calc-row">
+                                        <div class="input-row">
+                                            <div class="input-group">
+                                                <label>--rope-scaling <span class="tooltip-icon" data-tooltip="RoPE context extension method. Use 'yarn' for YaRN-aware scaling (recommended for most models beyond their trained context). 'linear' is simpler but degrades quality faster at long contexts.">?</span></label>
+                                                <select id="ropeScalingSelect" class="glass-input">
+                                                    <option value="none" selected>none</option>
+                                                    <option value="linear">linear</option>
+                                                    <option value="yarn">yarn</option>
+                                                </select>
+                                            </div>
+                                            <div class="input-group">
+                                                <label>--rope-freq-base <span class="tooltip-icon" data-tooltip="RoPE base frequency. Higher values extend context range. Common values: 500000 (Llama 3), 1000000 (some extended models). Leave empty to use model default.">?</span></label>
+                                                <input type="number" id="ropeFreqBaseInput" class="glass-input" placeholder="Model default" min="1">
+                                            </div>
+                                            <div class="input-group">
+                                                <label>--rope-freq-scale <span class="tooltip-icon" data-tooltip="RoPE frequency scale factor. Values < 1.0 extend context (e.g. 0.5 doubles context range). Leave empty or set to 1.0 to use model default.">?</span></label>
+                                                <input type="number" id="ropeFreqScaleInput" class="glass-input" placeholder="1.0" step="0.1" min="0.01">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- LoRA Adapter -->
+                                <div class="calc-row">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>--lora (path) <span class="tooltip-icon" data-tooltip="Path to a LoRA adapter GGUF file. Leave empty to skip. The adapter is applied on top of the base model at runtime.">?</span></label>
+                                            <input type="text" id="loraPathInput" class="glass-input" placeholder="Leave empty to skip">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--lora-scale <span class="tooltip-icon" data-tooltip="Scaling factor for the LoRA adapter (default 1.0). Values < 1.0 reduce adapter influence; values > 1.0 amplify it.">?</span></label>
+                                            <input type="number" id="loraScaleInput" class="glass-input" value="1.0" step="0.1" min="0">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- NUMA (shown for ≥16 physical cores) -->
+                                <div class="input-row" id="numaRow" style="display: none; margin-top: 10px; align-items: center;">
+                                    <div class="input-group">
+                                        <div class="toggles-grid" style="justify-content: flex-start;">
+                                            <input type="checkbox" id="numaCheck" class="cat-checkbox">
+                                            <label for="numaCheck" class="cat-label" title="NUMA topology optimization for multi-socket server systems. Improves memory locality for CPU inference.">--numa</label>
+                                        </div>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>NUMA Mode <span class="tooltip-icon" data-tooltip="'distribute' spreads threads across NUMA nodes for balanced load. 'isolate' pins threads to a single node for lower latency.">?</span></label>
+                                        <select id="numaModeSelect" class="glass-input">
+                                            <option value="distribute">distribute</option>
+                                            <option value="isolate">isolate</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- ─── Sampling Parameters (CLI only) ─── -->
+                        <div class="module-container active" id="samplingSection" style="margin-top: 30px;">
+                            <div class="module-header">Sampling Parameters <span style="font-size: 0.75rem; font-weight: 400; opacity: 0.55;">(CLI mode only)</span></div>
+                            <div class="module-content">
+                                <div class="calc-row">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>--temp <span class="tooltip-icon" data-tooltip="Sampling temperature. Higher = more creative/random. Lower = more deterministic. Default: 0.8. Set to 0 for greedy decoding.">?</span></label>
+                                            <input type="number" id="tempInput" class="glass-input" value="0.8" step="0.05" min="0" max="2">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--top-p <span class="tooltip-icon" data-tooltip="Nucleus sampling threshold. Only tokens whose cumulative probability exceeds this are considered. Default: 0.95. Lower = more focused.">?</span></label>
+                                            <input type="number" id="topPInput" class="glass-input" value="0.95" step="0.05" min="0" max="1">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--top-k <span class="tooltip-icon" data-tooltip="Top-K sampling. Only the K most likely tokens are considered. Default: 40. Set to 0 to disable.">?</span></label>
+                                            <input type="number" id="topKInput" class="glass-input" value="40" min="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="calc-row" style="margin-top: 0;">
+                                    <div class="input-row">
+                                        <div class="input-group">
+                                            <label>--min-p <span class="tooltip-icon" data-tooltip="Minimum probability threshold relative to the top token. Filters out very unlikely tokens. Default: 0.05.">?</span></label>
+                                            <input type="number" id="minPInput" class="glass-input" value="0.05" step="0.01" min="0" max="1">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--repeat-penalty <span class="tooltip-icon" data-tooltip="Penalty for repeating tokens. Values > 1.0 discourage repetition. Default: 1.1. Set to 1.0 to disable.">?</span></label>
+                                            <input type="number" id="repeatPenaltyInput" class="glass-input" value="1.1" step="0.05" min="1">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>--mirostat <span class="tooltip-icon" data-tooltip="Mirostat sampling algorithm. Dynamically adjusts temperature to maintain target perplexity. v2 is generally preferred. Overrides top-p/top-k when enabled.">?</span></label>
+                                            <select id="mirostatSelect" class="glass-input">
+                                                <option value="0" selected>Off</option>
+                                                <option value="1">Mirostat v1</option>
+                                                <option value="2">Mirostat v2</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════
+                         RIGHT COLUMN: Metrics Dashboard
+                    ════════════════════════════════════════════════ -->
+                    <div>
+                        <div class="dash-card" style="margin-bottom: 30px;">
+
+                            <!-- Decode TPS -->
+                            <div class="gt-label">Expected Speed (Decode) <span class="tooltip-icon" style="margin-bottom:2px;" data-tooltip="Estimated decode tokens per second using memory-bandwidth heuristics. For MoE models, uses active parameter count. KV cache read cost is included in the denominator.">?</span></div>
+                            <div class="gt-value" id="tpsDisplay" style="color: #38bdf8;">0.0 t/s</div>
+
+                            <!-- Prefill + Bandwidth sub-metrics -->
+                            <div class="item-row" style="margin-top: 4px; padding: 6px 0; border-bottom: none;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted);">Prefill Speed (est.)</span>
+                                <span id="prefillTpsDisplay" style="font-size: 0.85rem; color: var(--text-muted);">—</span>
+                            </div>
+                            <div class="item-row" style="padding: 4px 0; border-bottom: 1px solid var(--border-glass);">
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">Bandwidth</span>
+                                <span id="bandwidthDisplay" style="font-size: 0.75rem; color: var(--text-muted);">—</span>
+                            </div>
+
+                            <div class="line-items" style="margin-top: 20px;">
+                                <div class="gt-label" style="margin-bottom: 10px;">VRAM Budget (GB)</div>
+                                <div class="vram-bar-bg">
+                                    <div id="barOs"    class="vram-segment" style="background: #64748b; width: 0%;"></div>
+                                    <div id="barCtx"   class="vram-segment" style="background: #38bdf8; width: 0%;"></div>
+                                    <div id="barModel" class="vram-segment" style="background: #34d399; width: 0%;"></div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">
+                                    <span>OS: <span id="lblOs">1.5</span></span>
+                                    <span>Ctx: <span id="lblCtx">0.0</span></span>
+                                    <span>Model: <span id="lblModel">0.0</span></span>
+                                </div>
+
+                                <div class="item-row" style="margin-top: 20px;">
+                                    <span>Total Required Mem</span>
+                                    <span id="totalMemDisplay" style="font-weight: bold;">0.00 GB</span>
+                                </div>
+                                <div class="item-row">
+                                    <span>System RAM Load</span>
+                                    <span id="ramSpillDisplay">0.00 GB</span>
+                                </div>
+                                <!-- MoE expert offload breakdown (shown when --n-cpu-moe > 0) -->
+                                <div class="item-row" id="moeRamBreakdown" style="display: none; padding: 6px 0 6px 14px; border-bottom: none;">
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">└ MoE Expert Offload</span>
+                                    <span id="moeRamBreakdownValue" style="font-size: 0.8rem; color: var(--text-muted);">0.00 GB</span>
+                                </div>
+                                <div class="item-row">
+                                    <span>Deployment Status</span>
+                                    <span id="offloadDisplay">Full</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Generated Command -->
+                        <div class="dash-card" style="position: sticky; top: 120px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div class="gt-label" style="margin: 0;">Generated Command</div>
+                                <button id="copyBtn" class="copy-button">Copy</button>
+                            </div>
+                            <div class="glass-input" id="commandOutput" style="font-family: monospace; font-size: 1.1rem !important; word-break: break-all; background: rgba(0,0,0,0.4); padding: 20px; line-height: 1.5; color: #38bdf8; min-height: 120px;"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+    <script src="script.js"></script>
+</body>
+</html>
