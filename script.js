@@ -1,6 +1,3 @@
-// ============================================================
-// DOM References
-// ============================================================
 const modelSelect = document.getElementById('modelSelect');
 const quantSelect = document.getElementById('quantSelect');
 const contextSlider = document.getElementById('contextSlider');
@@ -43,6 +40,9 @@ const numaRow = document.getElementById('numaRow');
 const numaCheck = document.getElementById('numaCheck');
 const numaModeSelect = document.getElementById('numaModeSelect');
 
+const reasoningToggleRow = document.getElementById('reasoningToggleRow');
+const reasoningCheck = document.getElementById('reasoningCheck');
+
 const samplingSection = document.getElementById('samplingSection');
 const tempInput = document.getElementById('tempInput');
 const topPInput = document.getElementById('topPInput');
@@ -62,6 +62,11 @@ const offloadDisplay = document.getElementById('offloadDisplay');
 const commandOutput = document.getElementById('commandOutput');
 const copyBtn = document.getElementById('copyBtn');
 
+const logBtn = document.getElementById('logBtn');
+const logTable = document.getElementById('logTable');
+const copyLogBtn = document.getElementById('copyLogBtn');
+const resetBtn = document.getElementById('resetBtn');
+
 const barOs = document.getElementById('barOs');
 const barCtx = document.getElementById('barCtx');
 const barModel = document.getElementById('barModel');
@@ -69,9 +74,6 @@ const lblOs = document.getElementById('lblOs');
 const lblCtx = document.getElementById('lblCtx');
 const lblModel = document.getElementById('lblModel');
 
-// ============================================================
-// Constants & Fallback Data
-// ============================================================
 let modelsData = [];
 let quantCatalogData = [];
 
@@ -82,9 +84,9 @@ const METADATA_OVERHEAD_GB = 0.15;
 const NON_REPEATING_WEIGHT_RATIO = 0.05;
 const CACHE_BYTES_BY_TYPE = { f16: 2, q8_0: 1, q4_0: 0.5 };
 const STORAGE_KEY = 'llamacalc_v1';
+const STORAGE_KEY_LOGS = 'llamacalc_logs_v1';
 
-// Discrete context size steps — slider index maps to these values
-const CONTEXT_SIZES = [2048, 4096, 8192, 16384, 32768, 65536, 131072];
+const CONTEXT_SIZES = [8000, 16000, 32000, 64000, 96000, 128000, 256000];
 
 const fallbackQuantCatalog = [
     { id: "FP16",   display_name: "FP16",   fallback_bytes_per_param: 2,      recommended: false },
@@ -96,9 +98,9 @@ const fallbackQuantCatalog = [
     { id: "Q2_K",   display_name: "Q2_K",   fallback_bytes_per_param: 0.3625, recommended: false }
 ];
 
-// ============================================================
-// State Persistence (localStorage)
-// ============================================================
+let benchmarkLogs = [];
+try { benchmarkLogs = JSON.parse(localStorage.getItem(STORAGE_KEY_LOGS)) || []; } catch(e){}
+
 function saveState() {
     try {
         const state = {
@@ -132,17 +134,17 @@ function saveState() {
             loraScale:     loraScaleInput.value,
             numa:          numaCheck.checked,
             numaMode:      numaModeSelect.value,
+            reasoning:     reasoningCheck.checked,
             temp:          tempInput.value,
             topP:          topPInput.value,
             topK:          topKInput.value,
             minP:          minPInput.value,
             repeatPenalty: repeatPenaltyInput.value,
             mirostat:      mirostatSelect.value,
-            // Save the resolved context size (not the slider index) for portability
             contextSize:   contextIndexToSize(contextSlider.value),
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) { /* localStorage unavailable (private browsing, etc.) */ }
+    } catch (e) {}
 }
 
 function loadState() {
@@ -183,6 +185,7 @@ function loadState() {
         if (s.loraScale !== undefined) loraScaleInput.value = s.loraScale;
         if (s.numa !== undefined)  numaCheck.checked = s.numa;
         if (s.numaMode)            numaModeSelect.value = s.numaMode;
+        if (s.reasoning !== undefined) reasoningCheck.checked = s.reasoning;
         if (s.temp !== undefined)          tempInput.value = s.temp;
         if (s.topP !== undefined)          topPInput.value = s.topP;
         if (s.topK !== undefined)          topKInput.value = s.topK;
@@ -190,7 +193,6 @@ function loadState() {
         if (s.repeatPenalty !== undefined) repeatPenaltyInput.value = s.repeatPenalty;
         if (s.mirostat !== undefined)      mirostatSelect.value = s.mirostat;
         if (s.contextSize !== undefined) {
-            // Convert saved context size back to a slider index
             const idx = contextSizeToIndex(s.contextSize);
             contextSlider.value = idx;
             contextDisplay.textContent = contextIndexToSize(idx);
@@ -201,9 +203,6 @@ function loadState() {
     }
 }
 
-// ============================================================
-// Utility Functions
-// ============================================================
 function showToast(message) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -235,24 +234,20 @@ function getQuantRecord(quantId) {
         || fallbackQuantCatalog.find(q => q.id === quantId);
 }
 
-/** Maps a slider index (0–6) to the corresponding context size token count. */
 function contextIndexToSize(index) {
-    return CONTEXT_SIZES[clamp(parseInt(index, 10), 0, CONTEXT_SIZES.length - 1)] || 4096;
+    return CONTEXT_SIZES[clamp(parseInt(index, 10), 0, CONTEXT_SIZES.length - 1)] || 16000;
 }
 
-/** Maps a context size token count back to the nearest slider index. */
 function contextSizeToIndex(size) {
     const idx = CONTEXT_SIZES.indexOf(parseInt(size, 10));
-    return idx >= 0 ? idx : 1; // default to index 1 (4096)
+    return idx >= 0 ? idx : 1;
 }
 
-/** Escapes a string for safe insertion into HTML attribute values or text nodes. */
 function escapeHtml(str) {
-    // Entities are built at runtime to prevent the file-save pipeline from decoding them.
-    const AMP  = String.fromCharCode(38) + 'amp;';   // &
-    const LT   = String.fromCharCode(38) + 'lt;';    // <
-    const GT   = String.fromCharCode(38) + 'gt;';    // >
-    const QUOT = String.fromCharCode(38) + 'quot;';  // "
+    const AMP  = String.fromCharCode(38) + 'amp;';
+    const LT   = String.fromCharCode(38) + 'lt;';
+    const GT   = String.fromCharCode(38) + 'gt;';
+    const QUOT = String.fromCharCode(38) + 'quot;';
     return String(str)
         .replace(/&/g, AMP)
         .replace(/</g, LT)
@@ -260,11 +255,6 @@ function escapeHtml(str) {
         .replace(/"/g, QUOT);
 }
 
-/**
- * Renders an array of command parts as an HTML string.
- * Parts with a `warning` property are rendered as red spans with a tooltip;
- * all other parts are rendered as plain escaped text.
- */
 function renderCommandParts(parts) {
     return parts.map(part => {
         const escaped = escapeHtml(part.text);
@@ -275,9 +265,6 @@ function renderCommandParts(parts) {
     }).join(' ');
 }
 
-// ============================================================
-// Estimation Engine
-// ============================================================
 function estimateModelWeightGB(model, quant) {
     if (model.quant_sizes_gb && Number.isFinite(model.quant_sizes_gb[quant.id])) {
         return model.quant_sizes_gb[quant.id];
@@ -311,10 +298,8 @@ function getAvailableRamGB(ramTotal) {
 }
 
 function estimateGpuBandwidthGBps(vramPerGpu) {
-    // User override takes priority
     const override = Number.parseFloat(gpuBandwidthInput.value);
     if (Number.isFinite(override) && override > 0) return override;
-    // Heuristic based on per-GPU VRAM tier
     if (vramPerGpu >= 24) return 600;
     if (vramPerGpu >= 16) return 448;
     if (vramPerGpu >= 12) return 336;
@@ -323,7 +308,6 @@ function estimateGpuBandwidthGBps(vramPerGpu) {
 }
 
 function estimateRamBandwidthGBps(physicalCores) {
-    // User override takes priority
     const override = Number.parseFloat(ramBandwidthInput.value);
     if (Number.isFinite(override) && override > 0) return override;
     if (physicalCores >= 16) return 100;
@@ -343,11 +327,6 @@ function estimateDecodeWeightGB(model, modelWeightGB) {
     );
 }
 
-/**
- * Estimates how much model weight (GB) is displaced from VRAM to RAM
- * when --n-cpu-moe N is set. Expert components of the first N layers
- * are forced into System RAM regardless of VRAM availability.
- */
 function estimateMoeExpertRamGB(model, modelWeightGB, ncpumoe) {
     if (model.architecture !== "moe" || ncpumoe <= 0) return 0;
     const layers   = model.layers || 32;
@@ -359,8 +338,6 @@ function estimateMoeExpertRamGB(model, modelWeightGB, ncpumoe) {
 
     let expertFractionOfWeight;
     if (numExperts > 1 && activeExperts < numExperts) {
-        // Algebraically derive shared (non-expert) parameter count:
-        // S = (activeB - (activeExperts/numExperts) * totalB) / (1 - activeExperts/numExperts)
         const ratio  = activeExperts / numExperts;
         const sharedB = (activeB - ratio * totalB) / (1 - ratio);
         expertFractionOfWeight = Math.max(0, Math.min(1, (totalB - sharedB) / totalB));
@@ -372,33 +349,27 @@ function estimateMoeExpertRamGB(model, modelWeightGB, ncpumoe) {
 
 function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay, physicalCores, vramPerGpu, gpuCount }) {
     const decodeWeightGB = Math.max(estimateDecodeWeightGB(model, modelWeightGB), 0.01);
-    // KV cache is read from memory on every generated token alongside model weights.
     const kvGB = kvCacheGB || 0;
     const layers = model.layers || 32;
     const gpuBandwidthPerGpu = estimateGpuBandwidthGBps(vramPerGpu);
-    // With tensor parallelism, effective bandwidth scales with GPU count
     const effectiveGpuBandwidth = gpuBandwidthPerGpu * (gpuCount || 1);
     const ramBandwidth  = estimateRamBandwidthGBps(physicalCores);
     const gpuEfficiency = 0.55;
     const cpuEfficiency = 0.35;
     const coreFactor    = Math.min(1, physicalCores / 8);
 
-    // Full GPU: model weights + KV cache both read from VRAM
     const fullGpuTps = effectiveGpuBandwidth > 0
         ? (effectiveGpuBandwidth * gpuEfficiency) / (decodeWeightGB + kvGB)
         : 0;
-    // CPU only: model weights + KV cache both read from RAM
     const cpuTps = (ramBandwidth * cpuEfficiency * coreFactor) / (decodeWeightGB + kvGB);
 
     if (mode === "full_gpu") {
-        // Prefill is compute-bound, roughly 8× faster than decode on GPU
         return { selectedTps: fullGpuTps, fullGpuTps, cpuTps, hybridTps: 0, prefillTps: fullGpuTps * 8 };
     }
 
     if (mode === "hybrid" && nglDisplay > 0 && layers > 0 && effectiveGpuBandwidth > 0) {
         const gpuFraction = clamp(nglDisplay / layers, 0, 1);
         const cpuFraction = 1 - gpuFraction;
-        // KV cache lives in VRAM (reserved there first), so it is read at GPU bandwidth.
         const gpuTime = (decodeWeightGB * gpuFraction + kvGB) / (effectiveGpuBandwidth * gpuEfficiency);
         const cpuTime = (decodeWeightGB * cpuFraction) / (ramBandwidth * cpuEfficiency * coreFactor);
         const syncPenalty = 1 + 0.25 + 0.10;
@@ -412,7 +383,6 @@ function estimatePerformance({ mode, model, modelWeightGB, kvCacheGB, nglDisplay
 function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB, availableVram, availableRam, moeExpertRamGB }) {
     const layers   = model.layers || 32;
     const moeRamGB = moeExpertRamGB || 0;
-    // When --n-cpu-moe is set, expert weights for N layers are forced to RAM.
     const effectiveVramWeightGB = Math.max(0, modelWeightGB - moeRamGB);
     const nonRepeatingWeightGB  = effectiveVramWeightGB * NON_REPEATING_WEIGHT_RATIO;
     const repeatingWeightGB     = effectiveVramWeightGB - nonRepeatingWeightGB;
@@ -431,7 +401,6 @@ function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB
             vramUsedGB: 0, ramUsedGB: totalRuntimeMemoryGB, totalRuntimeMemoryGB };
     }
 
-    // Full GPU: effective VRAM weight (after MoE expert offload) + KV cache + buffers fit in VRAM
     if (effectiveVramWeightGB + kvCacheGB + computeBufferGB + METADATA_OVERHEAD_GB <= availableVram) {
         return { mode: "full_gpu", nglCommand: 999, nglDisplay: layers,
             vramUsedGB: totalRuntimeMemoryGB - moeRamGB,
@@ -460,9 +429,6 @@ function estimateOffload({ env, model, modelWeightGB, kvCacheGB, computeBufferGB
         vramUsedGB: 0, ramUsedGB: totalRuntimeMemoryGB, totalRuntimeMemoryGB };
 }
 
-// ============================================================
-// UI Helpers
-// ============================================================
 function shellQuote(value) {
     return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
@@ -481,14 +447,6 @@ function getOffloadPresentation(mode, nglDisplay, warnings) {
     return { text: "Full GPU Offload (Optimal)", color: "#34d399" };
 }
 
-// ============================================================
-// Command Builder
-// ============================================================
-/**
- * Builds the llama.cpp command as an array of { text, warning } parts.
- * Parts with a non-null `warning` are rendered in red with a tooltip in the UI.
- * Parts with warning=null are rendered normally.
- */
 function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThreads, runMode, parallelSlots, selectedModel, availableRam, modelWeightGB, kvCacheGB, computeBufferGB, gpuCount }) {
     const parts = [];
     function add(text, warning = null) { parts.push({ text, warning }); }
@@ -502,7 +460,6 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
     add(runMode === 'server' ? `./llama.cpp/build/bin/llama-server` : `./llama.cpp/build/bin/llama-cli`);
     add(`-m ${shellQuote(modelPath)}`);
 
-    // Context size — flag as invalid if it exceeds the model's known maximum
     const ctxWarning = (selectedModel.max_context && contextSize > selectedModel.max_context)
         ? `Context size ${contextSize} exceeds the known model maximum of ${selectedModel.max_context} tokens. Output quality may degrade significantly.`
         : null;
@@ -510,7 +467,6 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
 
     add(`-t ${decodeThreads}`);
 
-    // Server-mode flags — always emitted so the command is fully explicit
     if (runMode === 'server') {
         const host    = hostInput.value.trim() || '0.0.0.0';
         const portRaw = Number.parseInt(portInput.value, 10);
@@ -524,23 +480,19 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         add(`-ngl ${nglCommand}`);
     }
 
-    // Multi-GPU tensor split (equal distribution)
     if (gpuCount > 1 && mode !== "cpu" && mode !== "oom") {
         add(`--tensor-split ${Array(gpuCount).fill('1').join(',')}`);
     }
 
-    // Flash attention — format: --flash-attn on
     if (flashattnCheck.checked && selectedModel.supports_flash_attention !== false) {
         add(`--flash-attn on`);
     }
 
-    // KV cache quantization types
     const cacheTypeK = cacheTypeKSelect.value;
     const cacheTypeV = cacheTypeVSelect.value;
     if (cacheTypeK !== 'f16') add(`--cache-type-k ${cacheTypeK}`);
     if (cacheTypeV !== 'f16') add(`--cache-type-v ${cacheTypeV}`);
 
-    // Memory flags — always emitted when checked; flagged red if constraints are violated
     if (nommapCheck.checked) {
         const nomapWarning = modelWeightGB > availableRam
             ? `--no-mmap: model weights (${modelWeightGB.toFixed(1)} GB) exceed available system RAM (${availableRam.toFixed(1)} GB). This flag will be ignored or cause errors at runtime.`
@@ -556,11 +508,9 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         add(`--mlock`, mlockWarning);
     }
 
-    // Chat template
     const jinjaVal = jinjaInput.value.trim();
     if (jinjaVal) add(`--chat-template ${shellQuote(jinjaVal)}`);
 
-    // MoE CPU expert offload
     const ncpumoe = Number.parseInt(ncpumoeInput.value, 10);
     if (ncpumoe > 0) {
         if (selectedModel.architecture === "moe") {
@@ -578,7 +528,6 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         }
     }
 
-    // RoPE scaling
     const ropeScaling = ropeScalingSelect.value;
     if (ropeScaling !== 'none') {
         add(`--rope-scaling ${ropeScaling}`);
@@ -588,7 +537,6 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         if (Number.isFinite(ropeFreqScale) && ropeFreqScale > 0 && ropeFreqScale !== 1) add(`--rope-freq-scale ${ropeFreqScale}`);
     }
 
-    // LoRA adapter
     const loraPath = loraPathInput.value.trim();
     if (loraPath) {
         add(`--lora ${shellQuote(loraPath)}`);
@@ -596,12 +544,10 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         if (Number.isFinite(loraScale) && loraScale !== 1.0) add(`--lora-scale ${loraScale}`);
     }
 
-    // NUMA topology
     if (numaCheck.checked) {
         add(`--numa ${numaModeSelect.value}`);
     }
 
-    // Batch flags
     if (batchThreads > 0) {
         const tbWarning = (Number.isFinite(batchThreadsVal) && batchThreadsVal > logicalThreads)
             ? `-tb value ${batchThreadsVal} exceeds the inferred logical thread count (${logicalThreads}). The value has been clamped to ${logicalThreads}.`
@@ -610,8 +556,11 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
     }
     if (batchSize > 0 && batchSize !== 512) add(`-b ${batchSize}`);
 
-    // Sampling parameters (CLI mode only — not applicable to server)
     if (runMode === 'cli') {
+        if (selectedModel.is_thinking_model && reasoningCheck.checked) {
+            add(`--reasoning off`);
+        }
+        
         const temp          = Number.parseFloat(tempInput.value);
         const topP          = Number.parseFloat(topPInput.value);
         const topK          = Number.parseInt(topKInput.value, 10);
@@ -630,9 +579,6 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
     return parts;
 }
 
-// ============================================================
-// Main Calculation
-// ============================================================
 function calculateMetrics() {
     if (!modelsData.length) return;
 
@@ -640,7 +586,6 @@ function calculateMetrics() {
     const quant = getQuantRecord(quantSelect.value);
     if (!selectedModel || !quant) return;
 
-    // Resolve context size from slider index
     const contextSize   = contextIndexToSize(contextSlider.value);
     const vramPerGpu    = readNonNegativeNumber(vramInput, 0);
     const gpuCount      = Math.max(1, Number.parseInt(gpuCountInput.value, 10) || 1);
@@ -655,10 +600,16 @@ function calculateMetrics() {
     const cacheTypeV    = cacheTypeVSelect.value;
     const warnings      = [];
 
-    // Conditional section visibility
     serverFlagsRow.style.display  = runMode === 'server' ? 'flex' : 'none';
     samplingSection.style.display = runMode === 'cli'    ? 'block' : 'none';
     numaRow.style.display         = physicalCores >= 16  ? 'flex' : 'none';
+
+    if (selectedModel.is_thinking_model) {
+        reasoningToggleRow.style.display = 'flex';
+    } else {
+        reasoningToggleRow.style.display = 'none';
+        reasoningCheck.checked = false;
+    }
 
     const modelWeightGB   = estimateModelWeightGB(selectedModel, quant);
     const kvCacheGB       = estimateKVCacheGB(selectedModel, contextSize, parallelSlots, cacheTypeK, cacheTypeV);
@@ -666,10 +617,8 @@ function calculateMetrics() {
     const availableVram   = getAvailableVramGB(env, totalVram);
     const availableRam    = getAvailableRamGB(ramTotal);
 
-    // RoPE section: show when context exceeds model default
-    ropeSection.style.display = contextSize > (selectedModel.default_context || 4096) ? 'block' : 'none';
+    ropeSection.style.display = contextSize > (selectedModel.default_context || 8192) ? 'block' : 'none';
 
-    // Read --n-cpu-moe early so offload and performance calculations account for it
     const ncpumoeRaw   = Number.parseInt(ncpumoeInput.value, 10);
     const ncpumoeValue = Number.isFinite(ncpumoeRaw) && ncpumoeRaw > 0 ? ncpumoeRaw : 0;
     const moeExpertRamGB = estimateMoeExpertRamGB(selectedModel, modelWeightGB, ncpumoeValue);
@@ -696,7 +645,6 @@ function calculateMetrics() {
 
     const presentation = getOffloadPresentation(offload.mode, offload.nglDisplay, warnings);
 
-    // TPS displays
     if (offload.mode === "oom") {
         tpsDisplay.textContent = "Fail";
         tpsDisplay.style.color = "#ef4444";
@@ -709,7 +657,6 @@ function calculateMetrics() {
         prefillTpsDisplay.style.color = presentation.color;
     }
 
-    // Bandwidth display
     const gpuBW = estimateGpuBandwidthGBps(vramPerGpu);
     const ramBW = estimateRamBandwidthGBps(physicalCores);
     if (env === 'gpu' && vramPerGpu > 0) {
@@ -721,13 +668,9 @@ function calculateMetrics() {
         bandwidthDisplay.textContent = `RAM: ~${ramBW} GB/s`;
     }
 
-    // Memory metrics
     totalMemDisplay.textContent = offload.totalRuntimeMemoryGB.toFixed(2) + " GB";
     ramSpillDisplay.textContent = offload.ramUsedGB.toFixed(2) + " GB";
-    ramSpillDisplay.style.color = offload.ramUsedGB > 0 ? "#f59e0b" : "#94a3b8";
-    if (offload.mode === "oom") ramSpillDisplay.style.color = "#ef4444";
 
-    // MoE expert RAM breakdown
     if (moeExpertRamGB > 0 && offload.ramUsedGB > 0) {
         moeRamBreakdown.style.display = 'flex';
         moeRamBreakdownValue.textContent = moeExpertRamGB.toFixed(2) + ' GB';
@@ -739,7 +682,6 @@ function calculateMetrics() {
     offloadDisplay.style.color = presentation.color;
     offloadDisplay.title = warnings.join("\n");
 
-    // VRAM budget bar
     lblOs.textContent    = env === "gpu" ? OS_VRAM_OVERHEAD_GB : "0";
     lblCtx.textContent   = kvCacheGB.toFixed(1);
     lblModel.textContent = modelWeightGB.toFixed(1);
@@ -751,12 +693,11 @@ function calculateMetrics() {
         barOs.style.width    = `${Math.min(pctOs, 100)}%`;
         barCtx.style.width   = `${Math.min(pctCtx, 100 - pctOs)}%`;
         barModel.style.width = `${Math.min(pctModel, Math.max(0, 100 - pctOs - pctCtx))}%`;
-        barModel.style.background = (pctOs + pctCtx + pctModel) > 100 ? "#f59e0b" : "#34d399";
+        barModel.style.background = (pctOs + pctCtx + pctModel) > 100 ? "#ef4444" : "#34d399";
     } else {
         barOs.style.width = "0%"; barCtx.style.width = "0%"; barModel.style.width = "0%";
     }
 
-    // Render command — invalid arguments appear in red with hover tooltips
     const parts = buildCommand({
         mode: offload.mode, nglCommand: offload.nglCommand, contextSize,
         physicalCores, logicalThreads, runMode, parallelSlots, selectedModel,
@@ -767,15 +708,11 @@ function calculateMetrics() {
     saveState();
 }
 
-// ============================================================
-// Initialization
-// ============================================================
 function handleModelChange() {
     if (!modelsData.length) return;
     const selectedModel = modelsData[modelSelect.value];
     jinjaInput.value = selectedModel.template || "chatml";
 
-    // Disable flash-attn toggle for models that don't support it
     const supportsFA = selectedModel.supports_flash_attention !== false;
     flashattnCheck.disabled = !supportsFA;
     const faLabel = document.querySelector('label[for="flashattnCheck"]');
@@ -789,6 +726,18 @@ function handleModelChange() {
     calculateMetrics();
 }
 
+function renderLogs() {
+    logTable.innerHTML = benchmarkLogs.map(l => `
+        <tr style="border-bottom: 1px solid var(--border-glass);">
+            <td style="padding: 10px;">${escapeHtml(l.model)}</td>
+            <td style="padding: 10px;">${escapeHtml(l.context)}</td>
+            <td style="padding: 10px;">${escapeHtml(l.promptTs)}</td>
+            <td style="padding: 10px;">${escapeHtml(l.genTs)}</td>
+            <td style="padding: 10px; font-family: monospace; font-size: 0.8rem; word-break: break-all;">${escapeHtml(l.command)}</td>
+        </tr>
+    `).join('');
+}
+
 function init() {
     Promise.all([
         fetch('models.json').then(res => res.json()),
@@ -798,7 +747,6 @@ function init() {
         modelsData = models;
         quantCatalogData = quants.length ? quants : fallbackQuantCatalog;
 
-        // Populate model select with architecture badges
         modelsData.forEach((m, index) => {
             const opt = document.createElement('option');
             opt.value = index;
@@ -806,7 +754,6 @@ function init() {
             modelSelect.appendChild(opt);
         });
 
-        // Populate quant select from catalog with recommendation badges
         quantSelect.innerHTML = '';
         quantCatalogData.forEach(q => {
             const opt = document.createElement('option');
@@ -816,23 +763,19 @@ function init() {
             quantSelect.appendChild(opt);
         });
 
-        // Restore saved state; returns saved model index
         const savedModelIndex = loadState();
         if (savedModelIndex !== null && savedModelIndex !== undefined && modelsData[savedModelIndex]) {
             modelSelect.value = savedModelIndex;
         }
 
         handleModelChange();
+        renderLogs();
     })
     .catch(err => {
-        console.error(err);
         commandOutput.textContent = "Error loading model or quant catalog.";
     });
 }
 
-// ============================================================
-// Event Listeners
-// ============================================================
 const allInputs = [
     modelSelect, quantSelect, vramInput, ramInput, gpuCountInput, cpuInput, envSelect,
     modelPathInput, jinjaInput, nommapCheck, mlockCheck, flashattnCheck,
@@ -840,7 +783,8 @@ const allInputs = [
     cacheTypeKSelect, cacheTypeVSelect, gpuBandwidthInput, ramBandwidthInput,
     ropeScalingSelect, ropeFreqBaseInput, ropeFreqScaleInput,
     loraPathInput, loraScaleInput, numaCheck, numaModeSelect,
-    tempInput, topPInput, topKInput, minPInput, repeatPenaltyInput, mirostatSelect
+    tempInput, topPInput, topKInput, minPInput, repeatPenaltyInput, mirostatSelect,
+    reasoningCheck
 ];
 
 allInputs.forEach(input => {
@@ -859,10 +803,41 @@ contextSlider.addEventListener('input', (e) => {
 });
 
 copyBtn.addEventListener('click', () => {
-    // Use textContent so HTML tags from invalid-arg spans are stripped
     navigator.clipboard.writeText(commandOutput.textContent).then(() => {
         showToast("Command copied to clipboard!");
     });
+});
+
+logBtn.addEventListener('click', () => {
+    const selectedModel = modelsData[modelSelect.value];
+    if(!selectedModel) return;
+    
+    benchmarkLogs.push({
+        model: selectedModel.name,
+        context: contextDisplay.textContent,
+        promptTs: prefillTpsDisplay.textContent,
+        genTs: tpsDisplay.textContent,
+        command: commandOutput.textContent
+    });
+    
+    localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(benchmarkLogs));
+    renderLogs();
+    showToast("Estimate logged!");
+});
+
+copyLogBtn.addEventListener('click', () => {
+    const md = ["| Model | Context | Prompt T/S | Gen T/S | Command |", "|---|---|---|---|---|"];
+    benchmarkLogs.forEach(l => {
+        md.push(`| ${l.model} | ${l.context} | ${l.promptTs} | ${l.genTs} | \`${l.command}\` |`);
+    });
+    navigator.clipboard.writeText(md.join('\n')).then(() => {
+        showToast("Benchmark logs copied!");
+    });
+});
+
+resetBtn.addEventListener('click', () => {
+    localStorage.clear();
+    location.reload();
 });
 
 init();
