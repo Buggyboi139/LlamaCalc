@@ -80,7 +80,7 @@
                         <input type="text" id="execPathInput" class="glass-input" value="./llama.cpp/build/bin/llama-cli">
                     </div>
                     <div class="input-group">
-                        <label>Environment</label>
+                        <label>Environment <span class="tooltip-icon" data-tooltip="Forces the AI to run strictly on the processor, ignoring graphics cards entirely. (No specific flag)">?</span></label>
                         <select id="envSelect" class="glass-input">
                             <option value="gpu">GPU</option>
                             <option value="cpu">CPU</option>
@@ -108,7 +108,7 @@
                         <label>Thinking Model Controls</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <input type="checkbox" id="reasoningCheck" class="cat-checkbox">
-                            <label for="reasoningCheck" class="cat-label" data-tooltip="Forces the model to skip generating thought processes. (--reasoning off)">Disable Reasoning</label>
+                            <label for="reasoningCheck" class="cat-label" data-tooltip="Prevents the model from outputting long thought processes before giving its final answer. (--reasoning off)">Disable Reasoning</label>
                         </div>
                     </div>
                 </div>
@@ -187,7 +187,7 @@
                         </select>
                     </div>
                     <div class="input-group">
-                        <label>MoE CPU Expert Offload</label>
+                        <label>MoE CPU Expert Offload <span class="tooltip-icon" data-tooltip="Moves specific 'expert' parts of the AI brain to System RAM to save VRAM on MoE models. (--n-cpu-moe)">?</span></label>
                         <input type="number" id="ncpumoeInput" class="glass-input" value="0">
                     </div>
                 </div>
@@ -204,7 +204,7 @@
                         <input type="number" id="portInput" class="glass-input" value="8080">
                     </div>
                     <div class="input-group">
-                        <label>Parallel Slots</label>
+                        <label>Parallel Slots <span class="tooltip-icon" data-tooltip="How many separate users or chats the server can process at the exact same time. (-np)">?</span></label>
                         <input type="number" id="npInput" class="glass-input" value="1">
                     </div>
                 </div>
@@ -213,7 +213,7 @@
             <div class="calc-row">
                 <div class="input-row">
                     <div class="input-group">
-                        <label>Cache K</label>
+                        <label>Cache K <span class="tooltip-icon" data-tooltip="Reduces the precision of the Chat History Memory to save VRAM, with a very slight cost to context quality. (--cache-type-k / --cache-type-v)">?</span></label>
                         <select id="cacheTypeKSelect" class="glass-input">
                             <option value="f16">f16</option>
                             <option value="q8_0">q8_0</option>
@@ -221,7 +221,7 @@
                         </select>
                     </div>
                     <div class="input-group">
-                        <label>Cache V</label>
+                        <label>Cache V <span class="tooltip-icon" data-tooltip="Reduces the precision of the Chat History Memory to save VRAM, with a very slight cost to context quality. (--cache-type-k / --cache-type-v)">?</span></label>
                         <select id="cacheTypeVSelect" class="glass-input">
                             <option value="f16">f16</option>
                             <option value="q8_0">q8_0</option>
@@ -242,7 +242,7 @@
             <div class="calc-row" id="ropeSection">
                 <div class="input-row">
                     <div class="input-group">
-                        <label>RoPE Scaling</label>
+                        <label>RoPE Scaling <span class="tooltip-icon" data-tooltip="Advanced settings to artificially stretch a model's maximum context limit beyond what it was trained for. (--rope-scaling)">?</span></label>
                         <select id="ropeScalingSelect" class="glass-input">
                             <option value="none">None</option>
                             <option value="linear">Linear</option>
@@ -271,7 +271,7 @@
                         <input type="text" id="jinjaInput" class="glass-input" value="">
                     </div>
                     <div class="input-group">
-                        <label>LoRA Path</label>
+                        <label>LoRA Path <span class="tooltip-icon" data-tooltip="Applies lightweight fine-tuning adapter files to change the model's behavior. (--lora / --lora-scale)">?</span></label>
                         <input type="text" id="loraPathInput" class="glass-input" value="">
                     </div>
                     <div class="input-group">
@@ -284,7 +284,7 @@
             <div class="calc-row" id="numaRow">
                 <div class="input-row">
                     <div class="input-group">
-                        <label>NUMA Mode</label>
+                        <label>NUMA Mode <span class="tooltip-icon" data-tooltip="Changes how memory is shared across multi-socket server motherboards. (--numa)">?</span></label>
                         <select id="numaModeSelect" class="glass-input">
                             <option value="distribute">Distribute</option>
                             <option value="isolate">Isolate</option>
@@ -292,11 +292,11 @@
                         </select>
                     </div>
                     <div class="input-group">
-                        <label>Threads Batch</label>
+                        <label>Threads Batch <span class="tooltip-icon" data-tooltip="How many CPU cores to use when reading the user's initial prompt. (-tb)">?</span></label>
                         <input type="number" id="threadsbatchInput" class="glass-input" value="">
                     </div>
                     <div class="input-group">
-                        <label>Batch Size</label>
+                        <label>Batch Size <span class="tooltip-icon" data-tooltip="How many tokens the AI reads at once. Higher numbers use more VRAM but process long prompts faster. (-b)">?</span></label>
                         <input type="number" id="batchsizeInput" class="glass-input" value="512">
                     </div>
                 </div>
@@ -342,6 +342,7 @@
                                 <th style="padding: 10px;">Prompt T/S</th>
                                 <th style="padding: 10px;">Gen T/S</th>
                                 <th style="padding: 10px;">Command</th>
+                                <th style="padding: 10px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="logTable"></tbody>

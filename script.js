@@ -97,7 +97,7 @@ const STORAGE_KEY_LOGS = 'llamacalc_logs_v1';
 const CONTEXT_SIZES = [8000, 16000, 32000, 64000, 96000, 128000, 256000];
 
 const fallbackQuantCatalog = [
-    { id: "FP16",   display_name: "FP16",   fallback_bytes_per_param: 2,      recommended: false },
+    { id: "FP16",   display_name: "FP16",   fallback_bytes_per_param: 2,       recommended: false },
     { id: "Q8_0",   display_name: "Q8_0",   fallback_bytes_per_param: 1.0625, recommended: false },
     { id: "Q6_K",   display_name: "Q6_K",   fallback_bytes_per_param: 0.825,  recommended: true  },
     { id: "Q5_K_M", display_name: "Q5_K_M", fallback_bytes_per_param: 0.70625,recommended: true  },
@@ -615,10 +615,10 @@ function buildCommand({ mode, nglCommand, contextSize, physicalCores, logicalThr
         const repeatPenalty = Number.parseFloat(repeatPenaltyInput.value);
         const mirostat      = Number.parseInt(mirostatSelect.value, 10);
 
-        if (Number.isFinite(temp)          && Math.abs(temp - 0.8) > 0.001)          add(`--temp ${temp}`);
-        if (Number.isFinite(topP)          && Math.abs(topP - 0.95) > 0.001)         add(`--top-p ${topP}`);
-        if (Number.isFinite(topK)          && topK !== 40)                            add(`--top-k ${topK}`);
-        if (Number.isFinite(minP)          && Math.abs(minP - 0.05) > 0.001)         add(`--min-p ${minP}`);
+        if (Number.isFinite(temp)          && Math.abs(temp - 0.8) > 0.001)         add(`--temp ${temp}`);
+        if (Number.isFinite(topP)          && Math.abs(topP - 0.95) > 0.001)        add(`--top-p ${topP}`);
+        if (Number.isFinite(topK)          && topK !== 40)                          add(`--top-k ${topK}`);
+        if (Number.isFinite(minP)          && Math.abs(minP - 0.05) > 0.001)        add(`--min-p ${minP}`);
         if (Number.isFinite(repeatPenalty) && Math.abs(repeatPenalty - 1.1) > 0.001) add(`--repeat-penalty ${repeatPenalty}`);
         if (mirostat > 0) add(`--mirostat ${mirostat}`);
     }
@@ -790,6 +790,9 @@ function renderLogs() {
                 <input type="text" class="editable-table-input" data-index="${index}" data-field="genTs" value="${escapeHtml(l.genTs)}">
             </td>
             <td style="padding: 10px; font-family: monospace; font-size: 0.8rem; word-break: break-all;">${escapeHtml(l.command)}</td>
+            <td style="padding: 10px;">
+                <button class="copy-button delete-log-btn" data-index="${index}" style="background: #ef4444; color: #fff; border: none;">Delete</button>
+            </td>
         </tr>
     `).join('');
 
@@ -799,6 +802,15 @@ function renderLogs() {
             const field = e.target.getAttribute('data-field');
             benchmarkLogs[idx][field] = e.target.value.trim();
             localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(benchmarkLogs));
+        });
+    });
+
+    document.querySelectorAll('.delete-log-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = e.target.getAttribute('data-index');
+            benchmarkLogs.splice(idx, 1);
+            localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(benchmarkLogs));
+            renderLogs();
         });
     });
 }
