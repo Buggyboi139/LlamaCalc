@@ -3,355 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Bench</title>
+    <title>Llama Command Bench</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="toast-container"></div>
     <div id="left-color-bar"></div>
+
     <nav>
         <div class="logo-container">
-            <span class="logo-text">LLM Bench</span>
+            <span class="logo-text">Llama Command Bench</span>
+            <span class="logo-subtitle">Linux llama.cpp CLI and server builder</span>
         </div>
-        <div>
-            <button id="resetBtn" class="copy-button" style="background: #ef4444; color: #fff; border: none;">Reset State</button>
+        <div class="nav-actions">
+            <button id="resetBuilderBtn" class="ghost-button">Reset Builder</button>
+            <button id="clearLogsBtn" class="danger-button">Clear Logs</button>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="dashboard-grid">
-            <div class="dash-card">
-                <div class="gt-label">Generation Speed</div>
-                <div id="tpsDisplay" class="gt-value">~0 t/s</div>
-                <div class="gt-label">Prompt Processing Speed</div>
-                <div id="prefillTpsDisplay" class="gt-value" style="font-size: 2.5rem;">~0 t/s</div>
-                <div id="offloadDisplay" style="margin-top: 10px; font-weight: 600;"></div>
-                <div id="bandwidthDisplay" style="margin-top: 5px; font-size: 0.9rem; color: var(--text-muted);"></div>
+    <main class="container">
+        <section class="hero-card">
+            <div>
+                <p class="eyebrow">No speed guessing. No VRAM astrology.</p>
+                <h1>Build the command. Run the benchmark. Log what actually happened.</h1>
+                <p class="hero-copy">A static Linux-first command builder for llama.cpp. Empty fields are ignored, raw flags are appended verbatim, and browser storage only keeps your last builder state plus benchmark logs.</p>
             </div>
-            
-            <div class="dash-card">
-                <div class="gt-label">VRAM Budget</div>
-                <div class="vram-bar-bg" style="margin: 15px 0;" data-tooltip="Staying strictly within the green zone ensures optimal speeds. Spilling over will cause severe slowdowns.">
-                    <div id="barOs" class="vram-segment" style="background: #94a3b8; width: 0%;" data-tooltip="System / Background Apps"></div>
-                    <div id="barCtx" class="vram-segment" style="background: #38bdf8; width: 0%;" data-tooltip="Chat History Memory"></div>
-                    <div id="barModel" class="vram-segment" style="background: #34d399; width: 0%;" data-tooltip="AI Brain / Weights"></div>
-                </div>
-                <div class="line-items">
-                    <div class="item-row">
-                        <span>System / Background Apps</span>
-                        <span><span id="lblOs">0</span> GB</span>
-                    </div>
-                    <div class="item-row">
-                        <span>Chat History Memory</span>
-                        <span><span id="lblCtx">0</span> GB</span>
-                    </div>
-                    <div class="item-row">
-                        <span>AI Brain / Weights</span>
-                        <span><span id="lblModel">0</span> GB</span>
-                    </div>
-                    <div class="item-row muted-row">
-                        <span>Total Runtime Memory</span>
-                        <span id="totalMemDisplay">0 GB</span>
-                    </div>
-                    <div class="item-row muted-row">
-                        <span>System RAM Spill</span>
-                        <span id="ramSpillDisplay">0 GB</span>
-                    </div>
-                    <div class="item-row muted-row" id="moeRamBreakdown" style="display:none;">
-                        <span>MoE RAM Spill</span>
-                        <span id="moeRamBreakdownValue">0 GB</span>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <div class="control-panel">
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Run Mode</label>
-                        <div style="display: flex; gap: 10px;">
-                            <label><input type="radio" name="runMode" value="cli" checked> CLI</label>
-                            <label><input type="radio" name="runMode" value="server"> Server</label>
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label>Executable Path</label>
-                        <input type="text" id="execPathInput" class="glass-input" value="./llama.cpp/build/bin/llama-cli">
-                    </div>
-                    <div class="input-group">
-                        <label>Environment <span class="tooltip-icon" data-tooltip="Forces the AI to run strictly on the processor, ignoring graphics cards entirely. (No specific flag)">?</span></label>
-                        <select id="envSelect" class="glass-input">
-                            <option value="gpu">GPU</option>
-                            <option value="cpu">CPU</option>
-                        </select>
-                    </div>
+            <div class="mode-card">
+                <label class="mode-option">
+                    <input type="radio" name="mode" value="server" checked>
+                    <span>Server</span>
+                </label>
+                <label class="mode-option">
+                    <input type="radio" name="mode" value="cli">
+                    <span>CLI</span>
+                </label>
+            </div>
+        </section>
+
+        <section class="command-card">
+            <div class="command-toolbar">
+                <div>
+                    <h2>Generated Command</h2>
+                    <p id="commandModeLabel">llama-server</p>
+                </div>
+                <div class="toolbar-actions">
+                    <label class="toggle-inline">
+                        <input type="checkbox" id="multilineCheck" checked>
+                        <span>Multiline</span>
+                    </label>
+                    <button id="copyCommandBtn" class="copy-button">Copy Command</button>
+                </div>
+            </div>
+            <pre id="commandOutput"></pre>
+            <div id="warningList" class="warning-list"></div>
+        </section>
+
+        <section id="builderMount" class="builder-grid"></section>
+
+        <section class="log-card">
+            <div class="log-header">
+                <div>
+                    <h2>Benchmark Log</h2>
+                    <p>Paste llama.cpp timing output, log the command, then compare real runs instead of worshipping fake estimates.</p>
+                </div>
+                <div class="toolbar-actions">
+                    <button id="copyMarkdownBtn" class="copy-button">Copy Markdown</button>
+                    <button id="copyCsvBtn" class="copy-button">Copy CSV</button>
                 </div>
             </div>
 
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Model</label>
-                        <select id="modelSelect" class="glass-input"></select>
-                    </div>
-                    <div class="input-group">
-                        <label>Quantization</label>
-                        <select id="quantSelect" class="glass-input"></select>
-                    </div>
+            <div class="log-input-grid">
+                <div class="input-group wide">
+                    <label for="timingPaste">Timing Output Parser</label>
+                    <textarea id="timingPaste" rows="6" placeholder="Paste llama.cpp timing output or server JSON timings here"></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="logName">Run Name</label>
+                    <input type="text" id="logName" placeholder="Qwen3 30B, 64k, Vulkan">
+                </div>
+                <div class="input-group">
+                    <label for="logBuild">llama.cpp Build</label>
+                    <input type="text" id="logBuild" placeholder="commit, tag, or build notes">
+                </div>
+                <div class="input-group">
+                    <label for="logPromptTps">Prompt t/s</label>
+                    <input type="text" id="logPromptTps">
+                </div>
+                <div class="input-group">
+                    <label for="logGenTps">Generation t/s</label>
+                    <input type="text" id="logGenTps">
+                </div>
+                <div class="input-group">
+                    <label for="logPromptTokens">Prompt Tokens</label>
+                    <input type="text" id="logPromptTokens">
+                </div>
+                <div class="input-group">
+                    <label for="logGenTokens">Generated Tokens</label>
+                    <input type="text" id="logGenTokens">
+                </div>
+                <div class="input-group">
+                    <label for="logTotalMs">Total ms</label>
+                    <input type="text" id="logTotalMs">
+                </div>
+                <div class="input-group wide">
+                    <label for="logNotes">Notes</label>
+                    <textarea id="logNotes" rows="3" placeholder="Driver, backend, model quirks, exact run context, or whatever else future-you will wish present-you had written down."></textarea>
                 </div>
             </div>
 
-            <div class="calc-row" id="reasoningToggleRow" style="display: none;">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Thinking Model Controls</label>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="reasoningCheck" class="cat-checkbox">
-                            <label for="reasoningCheck" class="cat-label" data-tooltip="Prevents the model from outputting long thought processes before giving its final answer. (--reasoning off)">Disable Reasoning</label>
-                        </div>
-                    </div>
-                </div>
+            <div class="log-actions">
+                <button id="parseTimingBtn" class="copy-button">Parse Timing Output</button>
+                <button id="logRunBtn" class="copy-button success-button">Log Current Command</button>
             </div>
 
-            <div class="calc-row slider-container">
-                <div class="budget-display"><span id="contextDisplay">16000</span> Tokens</div>
-                <div class="slider-wrapper">
-                    <input type="range" id="contextSlider" min="0" max="6" step="1" value="1">
-                    <div class="slider-notch-row">
-                        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-                    </div>
-                    <div class="slider-label-row">
-                        <span>8k</span><span>16k</span><span>32k</span><span>64k</span><span>96k</span><span>128k</span><span>256k</span>
-                    </div>
-                </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Name</th>
+                            <th>Mode</th>
+                            <th>Prompt t/s</th>
+                            <th>Gen t/s</th>
+                            <th>Tokens</th>
+                            <th>Build</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTable"></tbody>
+                </table>
             </div>
+        </section>
+    </main>
 
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>VRAM Per GPU (GB)</label>
-                        <input type="number" id="vramInput" class="glass-input" value="24">
-                    </div>
-                    <div class="input-group">
-                        <label>GPU Count</label>
-                        <input type="number" id="gpuCountInput" class="glass-input" value="1">
-                    </div>
-                    <div class="input-group">
-                        <label>System RAM (GB)</label>
-                        <input type="number" id="ramInput" class="glass-input" value="64">
-                    </div>
-                    <div class="input-group">
-                        <label>CPU Physical Cores</label>
-                        <input type="number" id="cpuInput" class="glass-input" value="8">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row">
-                <div class="toggles-grid">
-                    <input type="checkbox" id="flashattnCheck" class="cat-checkbox">
-                    <label for="flashattnCheck" class="cat-label" data-tooltip="Speeds up long context processing and saves VRAM using optimized math. (--flash-attn on)">Flash Attention</label>
-                    <input type="checkbox" id="noKvOffloadCheck" class="cat-checkbox">
-                    <label for="noKvOffloadCheck" class="cat-label" data-tooltip="Forces the Chat History memory to stay on the CPU instead of the graphics card. Slows down generation but saves VRAM. (-nkvo)">Disable KV Offload</label>
-                    <input type="checkbox" id="noPromptCacheCheck" class="cat-checkbox">
-                    <label for="noPromptCacheCheck" class="cat-label" data-tooltip="Stops the AI from saving recently read text. Saves memory but makes re-reading the same prompt much slower. (--no-cache-prompt)">Disable Prompt Caching</label>
-                    <input type="checkbox" id="contextShiftCheck" class="cat-checkbox">
-                    <label for="contextShiftCheck" class="cat-label" data-tooltip="Allows the AI to infinitely generate text by deleting the oldest chat messages on the fly. (--context-shift)">Enable Context Shift</label>
-                    <input type="checkbox" id="nommapCheck" class="cat-checkbox">
-                    <label for="nommapCheck" class="cat-label" data-tooltip="Forces the model fully into System RAM instead of streaming it from your storage drive. Faster if you have enough RAM. (--no-mmap)">No MMAP</label>
-                    <input type="checkbox" id="mlockCheck" class="cat-checkbox">
-                    <label for="mlockCheck" class="cat-label" data-tooltip="Locks the AI in RAM so the operating system doesn't accidentally move it to slow disk storage. (--mlock)">MLock</label>
-                    <input type="checkbox" id="numaCheck" class="cat-checkbox">
-                    <label for="numaCheck" class="cat-label" data-tooltip="Optimizes how the AI talks to the CPU on high-end, multi-processor motherboards. (--numa)">NUMA</label>
-                </div>
-            </div>
-
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Thread Priority <span class="tooltip-icon" data-tooltip="Tells your computer's processor to prioritize the AI over other background apps. (--prio)">?</span></label>
-                        <select id="threadPrioSelect" class="glass-input">
-                            <option value="0">Normal</option>
-                            <option value="1">Medium</option>
-                            <option value="2">High</option>
-                            <option value="3">Realtime</option>
-                        </select>
-                    </div>
-                    <div class="input-group" id="splitModeGroup" style="display: none;">
-                        <label>Split Mode <span class="tooltip-icon" data-tooltip="Determines how the AI is sliced up across multiple graphics cards. 'Layer' is standard, 'Row/Tensor' can be faster for specific setups. (-sm)">?</span></label>
-                        <select id="splitModeSelect" class="glass-input">
-                            <option value="layer">Layer (Default)</option>
-                            <option value="row">Row</option>
-                            <option value="tensor">Tensor</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>MoE CPU Expert Offload <span class="tooltip-icon" data-tooltip="Moves specific 'expert' parts of the AI brain to System RAM to save VRAM on MoE models. (--n-cpu-moe)">?</span></label>
-                        <input type="number" id="ncpumoeInput" class="glass-input" value="0">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row" id="serverFlagsRow">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Host</label>
-                        <input type="text" id="hostInput" class="glass-input" value="0.0.0.0">
-                    </div>
-                    <div class="input-group">
-                        <label>Port</label>
-                        <input type="number" id="portInput" class="glass-input" value="8080">
-                    </div>
-                    <div class="input-group">
-                        <label>Parallel Slots <span class="tooltip-icon" data-tooltip="How many separate users or chats the server can process at the exact same time. (-np)">?</span></label>
-                        <input type="number" id="npInput" class="glass-input" value="1">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Cache K <span class="tooltip-icon" data-tooltip="Reduces the precision of the Chat History Memory to save VRAM, with a very slight cost to context quality. (--cache-type-k / --cache-type-v)">?</span></label>
-                        <select id="cacheTypeKSelect" class="glass-input">
-                            <option value="f16">f16</option>
-                            <option value="q8_0">q8_0</option>
-                            <option value="q4_0">q4_0</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Cache V <span class="tooltip-icon" data-tooltip="Reduces the precision of the Chat History Memory to save VRAM, with a very slight cost to context quality. (--cache-type-k / --cache-type-v)">?</span></label>
-                        <select id="cacheTypeVSelect" class="glass-input">
-                            <option value="f16">f16</option>
-                            <option value="q8_0">q8_0</option>
-                            <option value="q4_0">q4_0</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>GPU Bandwidth (GB/s)</label>
-                        <input type="number" id="gpuBandwidthInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>RAM Bandwidth (GB/s)</label>
-                        <input type="number" id="ramBandwidthInput" class="glass-input" value="">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row" id="ropeSection">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>RoPE Scaling <span class="tooltip-icon" data-tooltip="Advanced settings to artificially stretch a model's maximum context limit beyond what it was trained for. (--rope-scaling)">?</span></label>
-                        <select id="ropeScalingSelect" class="glass-input">
-                            <option value="none">None</option>
-                            <option value="linear">Linear</option>
-                            <option value="yarn">Yarn</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>RoPE Freq Base</label>
-                        <input type="number" id="ropeFreqBaseInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>RoPE Freq Scale</label>
-                        <input type="number" id="ropeFreqScaleInput" class="glass-input" value="">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>Model Path</label>
-                        <input type="text" id="modelPathInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>Jinja Template</label>
-                        <input type="text" id="jinjaInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>LoRA Path <span class="tooltip-icon" data-tooltip="Applies lightweight fine-tuning adapter files to change the model's behavior. (--lora / --lora-scale)">?</span></label>
-                        <input type="text" id="loraPathInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>LoRA Scale</label>
-                        <input type="number" id="loraScaleInput" class="glass-input" value="1.0">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row" id="numaRow">
-                <div class="input-row">
-                    <div class="input-group">
-                        <label>NUMA Mode <span class="tooltip-icon" data-tooltip="Changes how memory is shared across multi-socket server motherboards. (--numa)">?</span></label>
-                        <select id="numaModeSelect" class="glass-input">
-                            <option value="distribute">Distribute</option>
-                            <option value="isolate">Isolate</option>
-                            <option value="numactl">Numactl</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Threads Batch <span class="tooltip-icon" data-tooltip="How many CPU cores to use when reading the user's initial prompt. (-tb)">?</span></label>
-                        <input type="number" id="threadsbatchInput" class="glass-input" value="">
-                    </div>
-                    <div class="input-group">
-                        <label>Batch Size <span class="tooltip-icon" data-tooltip="How many tokens the AI reads at once. Higher numbers use more VRAM but process long prompts faster. (-b)">?</span></label>
-                        <input type="number" id="batchsizeInput" class="glass-input" value="512">
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row" id="samplingSection">
-                <div class="input-row">
-                    <div class="input-group"><label>Temp</label><input type="number" id="tempInput" class="glass-input" value="0.8"></div>
-                    <div class="input-group"><label>Top P</label><input type="number" id="topPInput" class="glass-input" value="0.95"></div>
-                    <div class="input-group"><label>Top K</label><input type="number" id="topKInput" class="glass-input" value="40"></div>
-                    <div class="input-group"><label>Min P</label><input type="number" id="minPInput" class="glass-input" value="0.05"></div>
-                    <div class="input-group"><label>Repeat Penalty</label><input type="number" id="repeatPenaltyInput" class="glass-input" value="1.1"></div>
-                    <div class="input-group">
-                        <label>Mirostat</label>
-                        <select id="mirostatSelect" class="glass-input">
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="calc-row" style="background: rgba(0,0,0,0.5);">
-                <div id="commandOutput" style="font-family: monospace; font-size: 1rem; color: #34d399; word-break: break-all; min-height: 40px;"></div>
-                <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button id="copyBtn" class="copy-button">Copy Command</button>
-                    <button id="logBtn" class="copy-button" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #10b981;">Log Current Estimate</button>
-                </div>
-            </div>
-
-            <div class="calc-row" style="margin-top: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; font-size: 1.2rem;">Benchmark Log</h3>
-                    <button id="copyLogBtn" class="copy-button">Copy Results</button>
-                </div>
-                <div style="overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid var(--border-glass);">
-                                <th style="padding: 10px;">Model</th>
-                                <th style="padding: 10px;">Context</th>
-                                <th style="padding: 10px;">Prompt T/S</th>
-                                <th style="padding: 10px;">Gen T/S</th>
-                                <th style="padding: 10px;">Command</th>
-                                <th style="padding: 10px;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logTable"></tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div>
-    </div>
     <script src="script.js"></script>
 </body>
 </html>
