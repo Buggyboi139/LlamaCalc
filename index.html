@@ -59,7 +59,23 @@
             <div id="warningList" class="warning-list"></div>
         </section>
 
-        <section id="builderMount" class="builder-grid"></section>
+        <section class="main-card">
+            <div class="main-header">
+                <div>
+                    <h2>Main Controls</h2>
+                    <p>Most-used flags for normal server and CLI runs. Everything else is buried in Advanced, where it can think about what it did.</p>
+                </div>
+            </div>
+            <div id="mainMount" class="input-grid main-grid"></div>
+        </section>
+
+        <details class="advanced-panel">
+            <summary>
+                <span>Advanced</span>
+                <small>GPU split, cache details, sampling, server endpoints, speculative decoding, MTPS, adapters, logging, and raw flags</small>
+            </summary>
+            <section id="builderMount" class="builder-grid"></section>
+        </details>
 
         <section class="log-card">
             <div class="log-header">
@@ -138,5 +154,18 @@
     </main>
 
     <script src="script.js"></script>
+    <script>
+        (() => {
+            const mainIds = ['serverPath','cliPath','modelPath','hfRepo','hfFile','ctxSize','predict','gpuLayers','flashAttn','cacheTypeK','cacheTypeV','kvOffload','host','port','parallel','prompt','systemPrompt','chatTemplate','reasoning','specType','specDraftModel','mtpRawFlags','extraFlags'];
+            const mainMount = document.getElementById('mainMount');
+            mainIds.forEach(id => {
+                const input = document.getElementById(id);
+                const group = input && input.closest('.input-group');
+                if (group) mainMount.appendChild(group);
+            });
+            document.querySelectorAll('#builderMount .flag-section').forEach(section => section.removeAttribute('open'));
+            if (typeof updateVisibility === 'function') updateVisibility();
+        })();
+    </script>
 </body>
 </html>
