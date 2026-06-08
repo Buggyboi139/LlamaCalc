@@ -44,7 +44,7 @@
         <section class="command-card">
             <div class="command-toolbar">
                 <div>
-                    <h2>Generated Command</h2>
+                    <h2 class="tooltip-heading" data-tooltip="This is the exact Linux command built from the fields below.">Generated Command</h2>
                     <p id="commandModeLabel">llama-server</p>
                 </div>
                 <div class="toolbar-actions">
@@ -62,7 +62,7 @@
         <section class="main-card">
             <div class="main-header">
                 <div>
-                    <h2>Main Controls</h2>
+                    <h2 class="tooltip-heading" data-tooltip="These are the fields most people change for normal runs.">Main Controls</h2>
                     <p>Most-used flags for normal server and CLI runs. Everything else is buried in Advanced, where it can think about what it did.</p>
                 </div>
             </div>
@@ -70,7 +70,7 @@
         </section>
 
         <details class="advanced-panel">
-            <summary>
+            <summary data-tooltip="Open this when you need less common llama.cpp flags.">
                 <span>Advanced</span>
                 <small>GPU split, cache details, sampling, server endpoints, speculative decoding, MTPS, adapters, logging, and raw flags</small>
             </summary>
@@ -80,7 +80,7 @@
         <section class="log-card">
             <div class="log-header">
                 <div>
-                    <h2>Benchmark Log</h2>
+                    <h2 class="tooltip-heading" data-tooltip="Save real benchmark results here after running a command.">Benchmark Log</h2>
                     <p>Paste llama.cpp timing output, log the command, then compare real runs instead of worshipping fake estimates.</p>
                 </div>
                 <div class="toolbar-actions">
@@ -90,42 +90,15 @@
             </div>
 
             <div class="log-input-grid">
-                <div class="input-group wide">
-                    <label for="timingPaste">Timing Output Parser</label>
-                    <textarea id="timingPaste" rows="6" placeholder="Paste llama.cpp timing output or server JSON timings here"></textarea>
-                </div>
-                <div class="input-group">
-                    <label for="logName">Run Name</label>
-                    <input type="text" id="logName" placeholder="Qwen3 30B, 64k, Vulkan">
-                </div>
-                <div class="input-group">
-                    <label for="logBuild">llama.cpp Build</label>
-                    <input type="text" id="logBuild" placeholder="commit, tag, or build notes">
-                </div>
-                <div class="input-group">
-                    <label for="logPromptTps">Prompt t/s</label>
-                    <input type="text" id="logPromptTps">
-                </div>
-                <div class="input-group">
-                    <label for="logGenTps">Generation t/s</label>
-                    <input type="text" id="logGenTps">
-                </div>
-                <div class="input-group">
-                    <label for="logPromptTokens">Prompt Tokens</label>
-                    <input type="text" id="logPromptTokens">
-                </div>
-                <div class="input-group">
-                    <label for="logGenTokens">Generated Tokens</label>
-                    <input type="text" id="logGenTokens">
-                </div>
-                <div class="input-group">
-                    <label for="logTotalMs">Total ms</label>
-                    <input type="text" id="logTotalMs">
-                </div>
-                <div class="input-group wide">
-                    <label for="logNotes">Notes</label>
-                    <textarea id="logNotes" rows="3" placeholder="Driver, backend, model quirks, exact run context, or whatever else future-you will wish present-you had written down."></textarea>
-                </div>
+                <div class="input-group wide"><label for="timingPaste">Timing Output Parser</label><textarea id="timingPaste" rows="6" placeholder="Paste llama.cpp timing output or server JSON timings here"></textarea></div>
+                <div class="input-group"><label for="logName">Run Name</label><input type="text" id="logName" placeholder="Qwen3 30B, 64k, Vulkan"></div>
+                <div class="input-group"><label for="logBuild">llama.cpp Build</label><input type="text" id="logBuild" placeholder="commit, tag, or build notes"></div>
+                <div class="input-group"><label for="logPromptTps">Prompt t/s</label><input type="text" id="logPromptTps"></div>
+                <div class="input-group"><label for="logGenTps">Generation t/s</label><input type="text" id="logGenTps"></div>
+                <div class="input-group"><label for="logPromptTokens">Prompt Tokens</label><input type="text" id="logPromptTokens"></div>
+                <div class="input-group"><label for="logGenTokens">Generated Tokens</label><input type="text" id="logGenTokens"></div>
+                <div class="input-group"><label for="logTotalMs">Total ms</label><input type="text" id="logTotalMs"></div>
+                <div class="input-group wide"><label for="logNotes">Notes</label><textarea id="logNotes" rows="3" placeholder="Driver, backend, model quirks, exact run context, or whatever else future-you will wish present-you had written down."></textarea></div>
             </div>
 
             <div class="log-actions">
@@ -133,23 +106,7 @@
                 <button id="logRunBtn" class="copy-button success-button">Log Current Command</button>
             </div>
 
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Name</th>
-                            <th>Mode</th>
-                            <th>Prompt t/s</th>
-                            <th>Gen t/s</th>
-                            <th>Tokens</th>
-                            <th>Build</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="logTable"></tbody>
-                </table>
-            </div>
+            <div class="table-wrap"><table><thead><tr><th>Date</th><th>Name</th><th>Mode</th><th>Prompt t/s</th><th>Gen t/s</th><th>Tokens</th><th>Build</th><th>Actions</th></tr></thead><tbody id="logTable"></tbody></table></div>
         </section>
     </main>
 
@@ -157,6 +114,20 @@
     <script>
         (() => {
             const mainIds = ['serverPath','cliPath','modelPath','hfRepo','hfFile','ctxSize','predict','gpuLayers','flashAttn','cacheTypeK','cacheTypeV','kvOffload','host','port','parallel','prompt','systemPrompt','chatTemplate','reasoning','specType','specDraftModel','mtpRawFlags','extraFlags'];
+            const tips = {
+                serverPath:'Path to your llama-server binary.',cliPath:'Path to your llama-cli binary.',modelPath:'Path to a local GGUF model file.',hfRepo:'Hugging Face repo or repo:file shorthand to download a model.',hfFile:'Specific GGUF file inside the Hugging Face repo.',hfToken:'Token for private Hugging Face models.',modelUrl:'Direct URL to a model file.',dockerRepo:'Docker model reference if your build supports it.',alias:'Friendly model name exposed by the server.',tags:'Extra labels shown in server model metadata.',mmproj:'Path to a multimodal projector file.',mmprojUrl:'URL for a multimodal projector file.',mmprojAuto:'Automatically load a matching multimodal projector.',mmprojOffload:'Move projector work to the GPU when supported.',talkerModel:'Speech/talker model used by server builds that support it.',code2wavModel:'Model used to convert generated audio codes into WAV output.',ctxSize:'Maximum context window in tokens.',predict:'Maximum tokens to generate; -1 usually means unlimited until stopped.',batchSize:'Prompt processing batch size.',ubatchSize:'Smaller internal batch size used inside the main batch.',threads:'CPU threads used for generation.',threadsBatch:'CPU threads used while processing the prompt.',seed:'Random seed for repeatable outputs.',keep:'Prompt tokens kept when context shifting happens.',prio:'CPU scheduling priority for llama.cpp threads.',numa:'Memory placement mode for multi-socket or NUMA systems.',cpuMask:'CPU affinity mask for generation threads.',cpuRange:'CPU range used for generation threads.',cpuStrict:'Force strict CPU affinity if your OS supports it.',cpuMaskBatch:'CPU affinity mask for prompt processing threads.',cpuRangeBatch:'CPU range for prompt processing threads.',cpuStrictBatch:'Force strict CPU affinity for batch threads.',swaFull:'Use full SWA cache when the model supports sliding-window attention.',noWarmup:'Skip the startup warmup pass.',escapeMode:'Controls whether backslash escape sequences are interpreted.',perfMode:'Print internal performance counters.',spmInfill:'Use SPM infill behavior for compatible models.',device:'GPU device IDs to use.',listDevices:'Print available backend devices and exit.',gpuLayers:'Number of model layers to offload to GPU; 999 is commonly used for all.',splitMode:'How model layers or tensors are split across GPUs.',tensorSplit:'Relative GPU split weights, such as 1,1 or 3,1.',mainGpu:'Primary GPU index used by split modes that need one.',flashAttn:'Use flash attention when your backend and model support it.',fit:'Ask llama.cpp to fit memory automatically when supported.',fitTarget:'Memory target for automatic fit mode.',fitCtx:'Minimum context size for fit mode.',kvOffload:'Controls whether KV cache lives on GPU or CPU.',repack:'Repack model weights for faster backend kernels.',noHost:'Avoid host buffers when the backend supports it.',opOffload:'Offload supported operations to GPU.',cpuMoe:'Keep MoE expert weights on CPU.',nCpuMoe:'Number of MoE layers to keep on CPU.',overrideTensor:'Force matching tensors onto a specific backend.',overrideKv:'Override model metadata values at load time.',checkTensors:'Validate tensor data when loading the model.',cacheTypeK:'Precision used for key cache memory.',cacheTypeV:'Precision used for value cache memory.',defragThold:'KV cache defrag threshold.',mlock:'Ask the OS to keep model memory from being swapped.',mmap:'Use memory mapping for loading model files.',directIo:'Bypass normal filesystem cache when reading model data.',contextShift:'Drop old tokens so generation can continue past the context limit.',promptCache:'File used to save and reload prompt processing state.',promptCacheAll:'Store the full prompt cache, not just reusable pieces.',promptCacheRo:'Read the prompt cache without writing changes.',cachePrompt:'Reuse matching prompt prefixes on the server.',cacheReuse:'Chunk size used for server cache reuse.',lookupCacheStatic:'Static lookup cache file for draft/speculative workflows.',lookupCacheDynamic:'Dynamic lookup cache file for draft/speculative workflows.',cacheRam:'RAM budget for supported cache features.',kvUnified:'Use one KV cache across server slots.',cacheIdleSlots:'Keep idle server slot caches available for reuse.',slotSavePath:'Directory where server slots can be saved.',samplers:'Ordered list of samplers used during token selection.',samplerSeq:'Short sampler sequence format used by llama.cpp.',ignoreEos:'Ignore the model end-of-sequence token.',temp:'Higher temperature makes output more random.',topK:'Only sample from the top K token candidates.',topP:'Sample from the smallest token set whose probability reaches this value.',minP:'Drop tokens below a minimum probability threshold.',topNSigma:'Filter tokens using sigma-based probability cutoff.',xtcProbability:'Chance of applying XTC sampling.',xtcThreshold:'Confidence threshold used by XTC sampling.',typicalP:'Prefer tokens with typical probability mass.',repeatLastN:'How many recent tokens are checked for repetition.',repeatPenalty:'Penalty applied to repeated tokens.',presencePenalty:'Penalty for tokens that already appeared.',frequencyPenalty:'Penalty that grows when tokens repeat often.',dryMultiplier:'Strength of DRY repetition suppression.',dryBase:'Base value used by DRY sampling.',dryAllowedLength:'Allowed repeated length before DRY pushes back.',dryPenaltyLastN:'Recent token window checked by DRY.',drySequenceBreaker:'Text sequences that stop DRY repetition matching.',adaptiveTarget:'Target probability for adaptive sampling.',adaptiveDecay:'How quickly adaptive sampling changes.',dynatempRange:'Amount dynamic temperature can vary.',dynatempExp:'Curve used by dynamic temperature.',mirostat:'Adaptive sampler that targets a stable surprise level.',mirostatLr:'How quickly Mirostat adjusts.',mirostatEnt:'Target entropy for Mirostat.',logitBias:'Manually boost or suppress specific token IDs.',grammar:'Inline grammar that constrains output.',grammarFile:'File containing a grammar constraint.',jsonSchema:'Inline JSON schema for structured output.',jsonSchemaFile:'File containing a JSON schema.',backendSampling:'Let supported backends handle sampling.',prompt:'Prompt text passed directly to llama-cli.',promptFile:'File containing the prompt.',systemPrompt:'System instruction used before the user prompt.',conversation:'Enable chat-style conversation mode.',singleTurn:'Exit after one assistant response.',interactive:'Allow interactive input during a CLI run.',reversePrompt:'Text that hands control back to the user.',special:'Show special tokens in output.',jinja:'Use Jinja chat templates.',chatTemplate:'Named or custom chat template.',chatTemplateFile:'File containing a chat template.',chatTemplateKwargs:'Extra JSON passed into the chat template.',skipChatParsing:'Do not parse OpenAI-style chat messages.',prefillAssistant:'Treat supplied assistant content as a prefill.',reasoning:'Controls reasoning behavior for models that expose it.',reasoningFormat:'Format used for reasoning content in server responses.',reasoningBudget:'Token budget for model reasoning when supported.',reasoningBudgetMessage:'Message used to describe the reasoning budget.',host:'Network address the server binds to.',port:'TCP port used by the server.',apiKey:'Password clients must send to use the server.',apiKeyFile:'File containing one or more API keys.',apiPrefix:'Path prefix added before API routes.',timeout:'Server request timeout in seconds.',threadsHttp:'Threads used for HTTP request handling.',parallel:'Number of server slots that can run in parallel.',contBatching:'Batch tokens from multiple requests together.',ui:'Enable or disable the built-in web UI.',uiConfig:'Inline JSON configuration for the web UI.',uiConfigFile:'File containing web UI configuration.',embedding:'Run the server in embedding mode.',rerank:'Enable reranking endpoints when supported.',pooling:'How token embeddings are pooled.',metrics:'Expose Prometheus-style metrics.',props:'Expose server properties endpoint.',slots:'Expose slot inspection and control endpoints.',sslKeyFile:'TLS private key file for HTTPS.',sslCertFile:'TLS certificate file for HTTPS.',mediaPath:'Directory for media/static files.',modelsDir:'Directory used by server router mode.',modelsPreset:'Preset model list for router mode.',modelsMax:'Maximum number of router models to load.',modelsAutoload:'Automatically load router models.',tools:'Built-in tools exposed by the server.',sleepIdleSeconds:'Idle time before the server sleeps when supported.',specType:'Speculative decoding mode to use.',specDefault:'Use llama.cpp default speculative settings.',specDraftModel:'Path to the smaller draft model.',specDraftHf:'Hugging Face repo for the draft model.',specDraftDevice:'GPU device IDs for the draft model.',specDraftGpuLayers:'Draft model layers to offload to GPU.',specDraftThreads:'CPU threads for the draft model.',specDraftThreadsBatch:'Batch threads for the draft model.',specDraftCpuMoe:'Keep draft MoE weights on CPU.',specDraftNCpuMoe:'Draft MoE layers kept on CPU.',specDraftNMax:'Maximum draft tokens proposed at once.',specDraftNMin:'Minimum draft tokens before accepting work.',specDraftPSplit:'Probability split used by speculative drafting.',specDraftPMin:'Minimum probability for draft tokens.',specDraftBackendSampling:'Use backend sampling for the draft model.',specNgramModNMin:'Minimum ngram length for modular ngram drafting.',specNgramModNMax:'Maximum ngram length for modular ngram drafting.',specNgramModNMatch:'Required match length for modular ngram drafting.',specNgramSimpleSizeN:'N value for simple ngram drafting.',specNgramSimpleSizeM:'M value for simple ngram drafting.',specNgramSimpleMinHits:'Minimum hits before simple ngram drafting is used.',mtpRawFlags:'Paste new MTPS flags here when the UI has not caught up.',lora:'LoRA adapter file to apply.',loraScaled:'LoRA adapter with an explicit scale value.',loraInitWithoutApply:'Load LoRA support without applying adapters immediately.',controlVector:'Control vector file to apply.',controlVectorScaled:'Control vector with an explicit scale value.',controlVectorLayerRange:'Layer range affected by control vectors.',verbose:'Print more CLI details.',logDisable:'Disable llama.cpp logging.',logFile:'Write logs to a file.',noDisplayPrompt:'Do not print the prompt back to the terminal.',showTimings:'Show timing output after a CLI run.',completionBash:'Print bash completion script and exit.',version:'Print llama.cpp version and exit.',extraFlags:'Paste any extra llama.cpp flags here verbatim.',timingPaste:'Paste timing text here and the app will try to extract speeds.',logName:'Short name for this benchmark run.',logBuild:'llama.cpp commit, tag, or build note.',logPromptTps:'Prompt processing speed from a real run.',logGenTps:'Token generation speed from a real run.',logPromptTokens:'Number of prompt tokens measured.',logGenTokens:'Number of generated tokens measured.',logTotalMs:'Total runtime in milliseconds.',logNotes:'Notes future-you will need when the numbers look weird.',multilineCheck:'Format the command across multiple shell lines.',resetBuilderBtn:'Clear saved builder fields but keep benchmark logs.',clearLogsBtn:'Delete all benchmark log rows.',copyCommandBtn:'Copy the generated command to your clipboard.',copyMarkdownBtn:'Copy benchmark logs as a Markdown table.',copyCsvBtn:'Copy benchmark logs as CSV.',parseTimingBtn:'Extract benchmark values from pasted llama.cpp output.',logRunBtn:'Save the current command and benchmark values.'
+            };
+            const genericTip = label => `${label.replace(/\?+$/,'')} controls a llama.cpp command option.`;
+            const addTip = (el, text) => {
+                if (!el || !text || el.querySelector('.tip')) return;
+                const tip = document.createElement('span');
+                tip.className = 'tip';
+                tip.tabIndex = 0;
+                tip.setAttribute('aria-label', text);
+                tip.dataset.tooltip = text;
+                tip.textContent = '?';
+                el.appendChild(tip);
+            };
             const mainMount = document.getElementById('mainMount');
             mainIds.forEach(id => {
                 const input = document.getElementById(id);
@@ -164,6 +135,16 @@
                 if (group) mainMount.appendChild(group);
             });
             document.querySelectorAll('#builderMount .flag-section').forEach(section => section.removeAttribute('open'));
+            document.querySelectorAll('label[for]').forEach(label => addTip(label, tips[label.getAttribute('for')] || genericTip(label.textContent.trim())));
+            document.querySelectorAll('button[id]').forEach(button => { if (tips[button.id]) button.dataset.tooltip = tips[button.id]; });
+            document.querySelectorAll('.mode-option').forEach(option => {
+                const input = option.querySelector('input');
+                option.dataset.tooltip = input?.value === 'server' ? 'Build a llama-server command for an API or web server.' : 'Build a llama-cli command for terminal generation.';
+            });
+            document.querySelectorAll('.flag-section summary').forEach(summary => {
+                const note = summary.parentElement.querySelector('.section-summary');
+                if (note) summary.dataset.tooltip = note.textContent.trim();
+            });
             if (typeof updateVisibility === 'function') updateVisibility();
         })();
     </script>
