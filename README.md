@@ -1,3 +1,5 @@
+✨Vibe-Code✨
+
 # Llama Command Bench
 
 A static Linux-first llama.cpp command builder and benchmark logger.
